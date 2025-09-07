@@ -2,8 +2,65 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const PasswordCrypto = require('./crypto');
+const keytar = require('keytar');
 
 let mainWindow;
+
+// Keychain-based 14-day cache for master password
+const KEYCHAIN_SERVICE = app.getName ? app.getName() : 'fastpw2';
+const KEYCHAIN_ACCOUNT = 'master-password';
+const CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+
+async function readCacheRecord() {
+  try {
+    const raw = await keytar.getPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.value === 'string') return parsed;
+    } catch (_) {
+      // Backward compatibility: plain string stored previously
+      return { value: raw, lastUsedAt: 0 };
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function getCachedMasterPassword() {
+  const rec = await readCacheRecord();
+  if (!rec) return null;
+  const lastUsedAt = typeof rec.lastUsedAt === 'number' ? rec.lastUsedAt : 0;
+  if (Date.now() - lastUsedAt > CACHE_TTL_MS) {
+    try { await keytar.deletePassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT); } catch (_) {}
+    return null;
+  }
+  return rec.value;
+}
+
+async function saveCachedMasterPassword(password) {
+  if (!password) return;
+  const record = JSON.stringify({ value: password, lastUsedAt: Date.now() });
+  try {
+    await keytar.setPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, record);
+  } catch (_) {}
+}
+
+async function touchCachedMasterPassword() {
+  const rec = await readCacheRecord();
+  if (!rec) return;
+  rec.lastUsedAt = Date.now();
+  try {
+    await keytar.setPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, JSON.stringify(rec));
+  } catch (_) {}
+}
+
+async function clearCachedMasterPassword() {
+  try {
+    await keytar.deletePassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
+  } catch (_) {}
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -86,6 +143,8 @@ ipcMain.handle('save-data', async (event, data) => {
     // Encrypt and save data
     const encryptedData = crypto.encrypt(JSON.stringify(data.entries));
     await fs.writeFile(dataPath, encryptedData);
+    // Refresh cache TTL on successful save
+    touchCachedMasterPassword();
 
     return { success: true };
   } catch (error) {
@@ -117,6 +176,8 @@ ipcMain.handle('load-data', async (event, masterPassword) => {
     try {
       const encryptedData = await fs.readFile(dataPath, 'utf8');
       const decryptedData = crypto.decrypt(encryptedData);
+      // Refresh cache TTL on successful load
+      touchCachedMasterPassword();
       return { success: true, data: JSON.parse(decryptedData) };
     } catch (error) {
       // Return empty array if file doesn't exist or can't be decrypted
@@ -148,6 +209,9 @@ ipcMain.handle('set-master-password', async (event, masterPassword) => {
     // Verify the file was created
     const fileExists = await fs.access(hashPath).then(() => true).catch(() => false);
     console.log('Hash file created successfully:', fileExists);
+
+    // Store in keychain for 14-day cache
+    await saveCachedMasterPassword(masterPassword);
 
     return { success: true };
   } catch (error) {
@@ -185,6 +249,44 @@ ipcMain.handle('debug-hash-file', async () => {
       hashPath,
       hashContent: hashContent ? hashContent.substring(0, 20) + '...' : null
     };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Keychain cache IPC endpoints
+ipcMain.handle('cache-get-master', async () => {
+  try {
+    const value = await getCachedMasterPassword();
+    return { success: true, value };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('cache-save-master', async (event, password) => {
+  try {
+    if (!password) return { success: false, error: 'Missing password' };
+    await saveCachedMasterPassword(password);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('cache-touch-master', async () => {
+  try {
+    await touchCachedMasterPassword();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('cache-clear-master', async () => {
+  try {
+    await clearCachedMasterPassword();
+    return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }

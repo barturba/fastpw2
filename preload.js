@@ -7,5 +7,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadData: (masterPassword) => ipcRenderer.invoke('load-data', masterPassword),
   setMasterPassword: (password) => ipcRenderer.invoke('set-master-password', password),
   verifyMasterPassword: (password) => ipcRenderer.invoke('verify-master-password', password),
-  debugHashFile: () => ipcRenderer.invoke('debug-hash-file')
+  debugHashFile: () => ipcRenderer.invoke('debug-hash-file'),
+  cacheGetMaster: () => ipcRenderer.invoke('cache-get-master'),
+  cacheSaveMaster: (password) => ipcRenderer.invoke('cache-save-master', password),
+  cacheTouchMaster: () => ipcRenderer.invoke('cache-touch-master'),
+  cacheClearMaster: () => ipcRenderer.invoke('cache-clear-master')
 });

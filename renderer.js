@@ -46,18 +46,21 @@ let formBaseline = null; // snapshot of form values for dirty check
 
 // Initialize the application
 async function init() {
-    // Check if master password is already set
+    // Attempt auto-login using secure 14-day cache
     try {
-        const result = await window.electronAPI.loadData('');
-        if (result.needsSetup) {
-            showLoginScreen();
-        } else {
-            showLoginScreen();
+        const cache = await window.electronAPI.cacheGetMaster();
+        if (cache && cache.success && cache.value) {
+            const success = await loadData(cache.value);
+            if (success) {
+                masterPassword = cache.value;
+                showMainApp();
+                return;
+            }
         }
-    } catch (error) {
-        console.error('Error initializing:', error);
-        showLoginScreen();
+    } catch (e) {
+        // Fall through to login screen
     }
+    showLoginScreen();
 }
 
 // Show login screen
@@ -175,6 +178,8 @@ async function saveData() {
             alert('Error saving data: ' + result.error);
         } else {
             console.log('Data saved successfully');
+            // Refresh cache TTL after writes
+            try { await window.electronAPI.cacheTouchMaster(); } catch (_) {}
         }
     } catch (error) {
         console.error('Error saving data:', error);
@@ -631,6 +636,8 @@ async function handleLogin() {
         masterPasswordInput.value = '';
         showMainApp();
         showLoginMessage('Login successful!', 'success');
+        // Save in secure cache to enable 14-day no-retype
+        try { await window.electronAPI.cacheSaveMaster(masterPassword); } catch (_) {}
     }
 }
 
@@ -679,6 +686,8 @@ async function handleSetupPassword() {
 
             showMainApp();
             showLoginMessage('Master password set successfully!', 'success');
+            // The main process also saved to cache, but ensure consistency
+            try { await window.electronAPI.cacheSaveMaster(masterPassword); } catch (_) {}
         } else {
             showLoginMessage('Error setting master password', 'error');
         }
@@ -693,6 +702,8 @@ function handleLogout() {
     passwordEntries = [];
     editingIndex = -1;
     showLoginScreen();
+    // Clear cache on explicit logout
+    try { window.electronAPI.cacheClearMaster(); } catch (_) {}
 }
 
 // Event listeners
