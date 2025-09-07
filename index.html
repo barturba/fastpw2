@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastPW2 - Password Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-container">
+            <h1>FastPW2 Password Manager</h1>
+            <div class="login-form">
+                <div class="form-group">
+                    <label for="masterPassword">Master Password:</label>
+                    <input type="password" id="masterPassword" placeholder="Enter your master password" required>
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword" id="confirmPasswordLabel" style="display: none;">Confirm Master Password:</label>
+                    <input type="password" id="confirmPassword" placeholder="Confirm your master password" style="display: none;">
+                </div>
+                <div class="login-buttons">
+                    <button id="loginBtn" class="btn btn-primary">Login</button>
+                    <button id="setupPasswordBtn" class="btn btn-secondary">Setup New Password</button>
+                </div>
+                <div id="loginMessage" class="login-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="main-app" style="display: none;">
+        <div class="container">
+            <header>
+                <h1>FastPW2 Password Manager</h1>
+                <div class="header-actions">
+                    <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+                    <button id="addEntry" class="btn btn-primary">Add New Entry</button>
+                </div>
+            </header>
+
+        <div class="table-container">
+            <table id="passwordTable">
+                <thead>
+                    <tr>
+                        <th>Company</th>
+                        <th>Login</th>
+                        <th>Fields</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="passwordTableBody">
+                    <!-- Password entries will be populated here -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Add/Edit Entry Modal -->
+        <div id="entryModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modalTitle">Add New Entry</h2>
+                    <span class="close">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <form id="entryForm">
+                        <div class="form-group">
+                            <label for="company">Company:</label>
+                            <input type="text" id="company" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="login">Login URL:</label>
+                            <input type="url" id="login" placeholder="https://example.com">
+                        </div>
+
+                        <div id="fieldsContainer">
+                            <div class="field-group">
+                                <label>Username:</label>
+                                <input type="text" class="field-input" placeholder="Enter username">
+                            </div>
+                            <div class="field-group">
+                                <label>Password:</label>
+                                <input type="password" class="field-input" placeholder="Enter password">
+                            </div>
+                        </div>
+
+                        <button type="button" id="addField" class="btn btn-secondary">Add Field</button>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="saveEntry" class="btn btn-primary">Save</button>
+                    <button type="button" id="cancelEntry" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>
