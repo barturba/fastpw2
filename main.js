@@ -38,14 +38,16 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  // Ensure app quits when window is closed (including macOS)
+  mainWindow.on('close', () => {
+    app.exit(0);
+  });
 }
 
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  app.exit(0);
 });
 
 app.on('activate', () => {

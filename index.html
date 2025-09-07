@@ -34,25 +34,22 @@
         <div class="container">
             <header>
                 <h1>FastPW2 Password Manager</h1>
-                <div class="header-actions">
-                    <button id="logoutBtn" class="btn btn-secondary">Logout</button>
-                    <button id="addEntry" class="btn btn-primary">Add New Entry</button>
-                </div>
+                <div class="header-actions"><button id="newItemBtn" class="btn btn-primary">+ New Item</button></div>
             </header>
 
         <div class="three-column">
             <aside class="pane pane-left">
-                <div class="pane-header">Companies</div>
+                <div class="pane-header"><span>Companies</span><button id="addCompanyBtn" class="icon-btn" title="Add company" aria-label="Add company">+</button></div>
                 <ul id="companyList" class="list"></ul>
             </aside>
 
             <section class="pane pane-middle">
-                <div class="pane-header">Logins</div>
+                <div class="pane-header"><span>Logins</span></div>
                 <ul id="loginList" class="list"></ul>
             </section>
 
             <section class="pane pane-right">
-                <div class="pane-header">Details</div>
+                <div class="pane-header"><span>Details</span><button id="editDetailsBtn" class="btn btn-secondary" title="Edit details" aria-label="Edit details">Edit</button></div>
                 <div id="detailsView" class="details"></div>
             </section>
         </div>
@@ -66,9 +63,14 @@
                 </div>
                 <div class="modal-body">
                     <form id="entryForm">
-                        <div class="form-group">
+                        <div class="form-group" id="companyGroup">
                             <label for="company">Company:</label>
                             <input type="text" id="company" required>
+                        </div>
+
+                        <div class="form-group" id="loginNameGroup" style="display: none;">
+                            <label for="loginName">Login name:</label>
+                            <input type="text" id="loginName" placeholder="Enter login name">
                         </div>
 
 
@@ -87,6 +89,7 @@
                     </form>
                 </div>
                 <div class="modal-footer">
+                    <button type="button" id="deleteLogin" class="btn btn-danger" style="display: none;">Delete Login</button>
                     <button type="button" id="saveEntry" class="btn btn-primary">Save</button>
                     <button type="button" id="cancelEntry" class="btn btn-secondary">Cancel</button>
                 </div>

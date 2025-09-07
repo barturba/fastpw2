@@ -3,6 +3,7 @@ let editingIndex = -1;
 let masterPassword = null;
 let selectedCompany = null;
 let selectedEntryIndex = null; // index into passwordEntries
+let companyContextMenuEl = null;
 
 // DOM elements
 const companyList = document.getElementById('companyList');
@@ -16,17 +17,24 @@ const confirmPasswordInput = document.getElementById('confirmPassword');
 const confirmPasswordLabel = document.getElementById('confirmPasswordLabel');
 const loginBtn = document.getElementById('loginBtn');
 const setupPasswordBtn = document.getElementById('setupPasswordBtn');
-const logoutBtn = document.getElementById('logoutBtn');
 const loginMessage = document.getElementById('loginMessage');
-const addEntryBtn = document.getElementById('addEntry');
+const addCompanyBtn = document.getElementById('addCompanyBtn');
+const newItemBtn = document.getElementById('newItemBtn');
+const editDetailsBtn = document.getElementById('editDetailsBtn');
 const entryModal = document.getElementById('entryModal');
 const entryForm = document.getElementById('entryForm');
 const modalTitle = document.getElementById('modalTitle');
 const saveEntryBtn = document.getElementById('saveEntry');
 const cancelEntryBtn = document.getElementById('cancelEntry');
 const addFieldBtn = document.getElementById('addField');
+const deleteLoginBtn = document.getElementById('deleteLogin');
 const companyInput = document.getElementById('company');
 const fieldsContainer = document.getElementById('fieldsContainer');
+const companyGroup = document.getElementById('companyGroup');
+const loginNameGroup = document.getElementById('loginNameGroup');
+const loginNameInput = document.getElementById('loginName');
+let modalMode = null; // 'addCompany' | 'addLogin' | 'edit' | null
+let modalTargetIndex = null; // used for addField/edit
 
 // Initialize the application
 async function init() {
@@ -193,11 +201,12 @@ function getCompanies() {
 function getLoginsForCompany(company) {
     return passwordEntries
         .map((entry, index) => ({ entry, index }))
-        .filter(x => x.entry.company === company);
+        .filter(x => x.entry.company === company && !x.entry.isCompanyOnly);
 }
 
 function getEntryTitle(entry) {
     if (!entry || !Array.isArray(entry.fields)) return 'Login';
+    if (entry.loginName) return entry.loginName;
     // Prefer username/email/user fields
     const preferred = entry.fields.find(f => /^(username|user|email)$/i.test(f.label));
     if (preferred && preferred.value) return preferred.value;
@@ -229,12 +238,18 @@ function renderCompanies() {
     companies.forEach(company => {
         const li = document.createElement('li');
         li.className = 'list-item' + (company === selectedCompany ? ' active' : '');
-        li.textContent = company;
+        const name = document.createElement('span');
+        name.textContent = company;
+        li.appendChild(name);
         li.addEventListener('click', () => {
             selectedCompany = company;
             selectedEntryIndex = null;
             renderCompanies();
             renderLogins();
+        });
+        li.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showCompanyContextMenu(e.clientX, e.clientY, company);
         });
         companyList.appendChild(li);
     });
@@ -285,6 +300,7 @@ function renderDetails() {
 
     const entry = passwordEntries[selectedEntryIndex];
     if (!entry) return;
+    if (entry.isCompanyOnly) return;
 
     const header = document.createElement('div');
     header.style.display = 'flex';
@@ -296,26 +312,10 @@ function renderDetails() {
     title.style.fontWeight = '600';
     title.textContent = `${entry.company} · ${getEntryTitle(entry)}`;
 
-    const actions = document.createElement('div');
-    actions.className = 'action-buttons';
-
-    const editBtn = document.createElement('button');
-    editBtn.className = 'btn btn-secondary';
-    editBtn.textContent = 'Edit';
-    editBtn.addEventListener('click', () => editEntry(selectedEntryIndex));
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'btn btn-danger';
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.addEventListener('click', () => deleteEntry(selectedEntryIndex));
-
-    actions.appendChild(editBtn);
-    actions.appendChild(deleteBtn);
     header.appendChild(title);
-    header.appendChild(actions);
     detailsView.appendChild(header);
 
-    entry.fields.forEach(field => {
+    entry.fields.forEach((field, fieldIdx) => {
         const row = document.createElement('div');
         row.className = 'detail-field' + (field.type === 'password' ? ' is-secret' : '');
 
@@ -362,38 +362,70 @@ function renderDetails() {
         line.appendChild(value);
         line.appendChild(copyHint);
 
+        // Inline edit/delete for fields via small buttons
+        const fieldActions = document.createElement('div');
+        fieldActions.className = 'action-buttons';
+        const editFieldBtn = document.createElement('button');
+        editFieldBtn.className = 'btn btn-secondary';
+        editFieldBtn.textContent = 'Edit';
+        editFieldBtn.addEventListener('click', () => {
+            editingIndex = selectedEntryIndex;
+            modalMode = 'edit';
+            showModal(true, passwordEntries[editingIndex]);
+            // Focus the field by adding one more empty row to encourage edits
+        });
+        const deleteFieldBtn = document.createElement('button');
+        deleteFieldBtn.className = 'btn btn-danger';
+        deleteFieldBtn.textContent = 'Delete';
+        deleteFieldBtn.addEventListener('click', () => {
+            if (!Array.isArray(passwordEntries[selectedEntryIndex].fields)) return;
+            passwordEntries[selectedEntryIndex].fields.splice(fieldIdx, 1);
+            saveData();
+            renderDetails();
+        });
+        fieldActions.appendChild(editFieldBtn);
+        fieldActions.appendChild(deleteFieldBtn);
+
         row.appendChild(label);
         row.appendChild(line);
+        row.appendChild(fieldActions);
         detailsView.appendChild(row);
     });
 }
 
 // Show modal for adding/editing entry
 function showModal(isEditing = false, entry = null) {
+    modalMode = isEditing ? 'edit' : modalMode;
     if (isEditing && entry) {
         modalTitle.textContent = 'Edit Entry';
         companyInput.value = entry.company;
+        companyInput.disabled = true;
+        if (loginNameGroup) {
+            loginNameGroup.style.display = 'block';
+            loginNameInput.value = entry.loginName || '';
+            loginNameInput.disabled = false;
+        }
+        if (companyGroup) companyGroup.style.display = 'block';
 
         // Clear existing fields
         fieldsContainer.innerHTML = '';
 
-        // Add existing fields
+        // Add existing fields (type first, label derived from type)
         entry.fields.forEach(field => {
-            addFieldInput(field.label, field.value, field.type);
+            addFieldInput(field.value, field.type);
         });
+        addFieldBtn.style.display = 'inline-block';
+        deleteLoginBtn.style.display = 'inline-block';
+        deleteLoginBtn.onclick = () => {
+            deleteEntry(editingIndex);
+            hideModal();
+        };
     } else {
         modalTitle.textContent = 'Add New Entry';
         entryForm.reset();
-        fieldsContainer.innerHTML = `
-            <div class="field-group">
-                <label>Username:</label>
-                <input type="text" class="field-input" placeholder="Enter username">
-            </div>
-            <div class="field-group">
-                <label>Password:</label>
-                <input type="password" class="field-input" placeholder="Enter password">
-            </div>
-        `;
+        fieldsContainer.innerHTML = '';
+        addFieldBtn.style.display = 'inline-block';
+        deleteLoginBtn.style.display = 'none';
     }
 
     entryModal.style.display = 'block';
@@ -405,19 +437,23 @@ function hideModal() {
     editingIndex = -1;
 }
 
-// Add a new field input to the form
-function addFieldInput(label = '', value = '', type = 'text') {
+// Utility to map type to default label
+function getDefaultLabelFromType(type) {
+    switch ((type || 'text').toLowerCase()) {
+        case 'username': return 'Username';
+        case 'password': return 'Password';
+        case 'email': return 'Email';
+        default: return 'Text';
+    }
+}
+
+// Add a new field input to the form: [type select][value input][remove]
+function addFieldInput(value = '', type = 'text') {
     const fieldGroup = document.createElement('div');
     fieldGroup.className = 'field-group';
 
-    const labelInput = document.createElement('input');
-    labelInput.type = 'text';
-    labelInput.placeholder = 'Field name';
-    labelInput.value = label;
-    labelInput.className = 'field-label-input';
-
     const valueInput = document.createElement('input');
-    valueInput.type = type;
+    valueInput.type = type === 'password' ? 'password' : 'text';
     valueInput.placeholder = 'Field value';
     valueInput.value = value;
     valueInput.className = 'field-input';
@@ -428,7 +464,14 @@ function addFieldInput(label = '', value = '', type = 'text') {
         <option value="text" ${type === 'text' ? 'selected' : ''}>Text</option>
         <option value="password" ${type === 'password' ? 'selected' : ''}>Password</option>
         <option value="email" ${type === 'email' ? 'selected' : ''}>Email</option>
+        <option value="username" ${type === 'username' ? 'selected' : ''}>Username</option>
     `;
+
+    // Ensure value input masks when password type is selected
+    typeSelect.addEventListener('change', () => {
+        const t = typeSelect.value;
+        valueInput.type = t === 'password' ? 'password' : 'text';
+    });
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
@@ -438,9 +481,8 @@ function addFieldInput(label = '', value = '', type = 'text') {
         fieldGroup.remove();
     });
 
-    fieldGroup.appendChild(labelInput);
-    fieldGroup.appendChild(valueInput);
     fieldGroup.appendChild(typeSelect);
+    fieldGroup.appendChild(valueInput);
     fieldGroup.appendChild(removeBtn);
 
     fieldsContainer.appendChild(fieldGroup);
@@ -448,39 +490,57 @@ function addFieldInput(label = '', value = '', type = 'text') {
 
 // Save entry (add or edit)
 function saveEntry() {
-    const company = companyInput.value.trim();
-
-    if (!company) {
-        alert('Company name is required');
+    if (modalMode === 'addCompany') {
+        const company = companyInput.value.trim();
+        if (!company) { alert('Company name is required'); return; }
+        const entry = { company, fields: [], isCompanyOnly: true };
+        passwordEntries.push(entry);
+        selectedCompany = company;
+        selectedEntryIndex = null;
+        saveData();
+        renderCompanies();
+        hideModal();
         return;
     }
 
+    if (modalMode === 'addLogin') {
+        const company = selectedCompany;
+        if (!company) { alert('Select a company first'); return; }
+        const loginName = loginNameInput.value.trim();
+        if (!loginName) { alert('Login name is required'); return; }
+        const entry = { company, loginName, fields: [] };
+        passwordEntries.push(entry);
+        selectedCompany = company;
+        selectedEntryIndex = passwordEntries.length - 1;
+        saveData();
+        renderCompanies();
+        hideModal();
+        return;
+    }
+
+    // no separate addField mode anymore
+
+    // Default edit behavior
+    const company = modalMode === 'edit' && editingIndex >= 0
+        ? (passwordEntries[editingIndex] && passwordEntries[editingIndex].company) || ''
+        : companyInput.value.trim();
+    if (!company) { alert('Company name is required'); return; }
+    const loginName = loginNameInput ? loginNameInput.value.trim() : '';
     const fields = [];
     const fieldGroups = fieldsContainer.querySelectorAll('.field-group');
-
     fieldGroups.forEach(group => {
-        const labelInput = group.querySelector('.field-label-input');
         const valueInput = group.querySelector('.field-input');
         const typeSelect = group.querySelector('.field-type-select');
-
-        if (labelInput && valueInput && typeSelect) {
-            const label = labelInput.value.trim();
+        if (valueInput && typeSelect) {
             const value = valueInput.value.trim();
             const type = typeSelect.value;
-
-            if (label && value) {
-                fields.push({ label, value, type });
-            }
+            const label = getDefaultLabelFromType(type);
+            if (label && value) { fields.push({ label, value, type }); }
         }
     });
-
-    if (fields.length === 0) {
-        alert('At least one field is required');
-        return;
-    }
-
+    if (fields.length === 0) { alert('At least one field is required'); return; }
     const entry = { company, fields };
-
+    if (loginName) entry.loginName = loginName;
     if (editingIndex >= 0) {
         passwordEntries[editingIndex] = entry;
         selectedCompany = entry.company;
@@ -490,7 +550,6 @@ function saveEntry() {
         selectedCompany = entry.company;
         selectedEntryIndex = passwordEntries.length - 1;
     }
-
     saveData();
     renderCompanies();
     hideModal();
@@ -516,6 +575,69 @@ function deleteEntry(index) {
             selectedCompany = null;
         }
         renderCompanies();
+    }
+}
+
+// Company context menu
+function showCompanyContextMenu(x, y, companyName) {
+    hideCompanyContextMenu();
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+
+    const editItem = document.createElement('div');
+    editItem.className = 'context-menu-item';
+    editItem.textContent = 'Edit Company Name';
+    editItem.addEventListener('click', () => {
+        const newName = prompt('Enter new company name:', companyName);
+        if (newName && newName.trim() && newName.trim() !== companyName) {
+            const trimmed = newName.trim();
+            passwordEntries.forEach(e => { if (e.company === companyName) e.company = trimmed; });
+            selectedCompany = trimmed;
+            saveData();
+            renderCompanies();
+        }
+        hideCompanyContextMenu();
+    });
+
+    const deleteItem = document.createElement('div');
+    deleteItem.className = 'context-menu-item danger';
+    deleteItem.textContent = 'Delete Company';
+    deleteItem.addEventListener('click', () => {
+        if (confirm(`Delete company "${companyName}" and all its logins?`)) {
+            passwordEntries = passwordEntries.filter(e => e.company !== companyName);
+            if (selectedCompany === companyName) {
+                selectedCompany = null;
+                selectedEntryIndex = null;
+            }
+            saveData();
+            renderCompanies();
+        }
+        hideCompanyContextMenu();
+    });
+
+    menu.appendChild(editItem);
+    menu.appendChild(deleteItem);
+    document.body.appendChild(menu);
+    companyContextMenuEl = menu;
+
+    const dismiss = (ev) => {
+        if (companyContextMenuEl && !companyContextMenuEl.contains(ev.target)) {
+            hideCompanyContextMenu();
+        }
+    };
+    setTimeout(() => {
+        window.addEventListener('mousedown', dismiss, { once: true });
+        window.addEventListener('scroll', hideCompanyContextMenu, { once: true });
+        window.addEventListener('resize', hideCompanyContextMenu, { once: true });
+    }, 0);
+}
+
+function hideCompanyContextMenu() {
+    if (companyContextMenuEl) {
+        companyContextMenuEl.remove();
+        companyContextMenuEl = null;
     }
 }
 
@@ -600,7 +722,7 @@ function handleLogout() {
 // Event listeners
 loginBtn.addEventListener('click', handleLogin);
 setupPasswordBtn.addEventListener('click', handleSetupPassword);
-logoutBtn.addEventListener('click', handleLogout);
+// logout removed
 masterPasswordInput.addEventListener('keypress', (event) => {
     if (event.key === 'Enter') {
         // If confirmation is visible, focus on it, otherwise proceed with login/setup
@@ -620,7 +742,7 @@ confirmPasswordInput.addEventListener('keypress', (event) => {
     }
 });
 
-addEntryBtn.addEventListener('click', () => showModal());
+// addEntry removed
 addFieldBtn.addEventListener('click', () => addFieldInput());
 saveEntryBtn.addEventListener('click', saveEntry);
 cancelEntryBtn.addEventListener('click', hideModal);
@@ -631,6 +753,49 @@ window.addEventListener('click', (event) => {
     if (event.target === entryModal) {
         hideModal();
     }
+});
+
+// Add entity buttons handlers
+addCompanyBtn.addEventListener('click', () => {
+    editingIndex = -1;
+    modalMode = 'addCompany';
+    entryForm.reset();
+    modalTitle.textContent = 'Add Company';
+    if (companyGroup) companyGroup.style.display = 'block';
+    companyInput.disabled = false;
+    companyInput.value = '';
+    if (loginNameGroup) loginNameGroup.style.display = 'none';
+    if (fieldsContainer) fieldsContainer.style.display = 'none';
+    addFieldBtn.style.display = 'none';
+    entryModal.style.display = 'block';
+});
+
+newItemBtn.addEventListener('click', () => {
+    if (!selectedCompany) { showToast('Select a company first'); return; }
+    editingIndex = -1;
+    modalMode = 'addLogin';
+    entryForm.reset();
+    modalTitle.textContent = 'Add Login';
+    if (companyGroup) companyGroup.style.display = 'block';
+    companyInput.value = selectedCompany;
+    companyInput.disabled = true;
+    if (loginNameGroup) {
+        loginNameGroup.style.display = 'block';
+        loginNameInput.value = '';
+        loginNameInput.disabled = false;
+    }
+    if (fieldsContainer) fieldsContainer.style.display = 'none';
+    addFieldBtn.style.display = 'none';
+    entryModal.style.display = 'block';
+});
+
+editDetailsBtn.addEventListener('click', () => {
+    if (selectedEntryIndex === null) { showToast('Select a login first'); return; }
+    const entry = passwordEntries[selectedEntryIndex];
+    if (!entry || entry.isCompanyOnly) { showToast('Select a login first'); return; }
+    editingIndex = selectedEntryIndex;
+    modalMode = 'edit';
+    showModal(true, entry);
 });
 
 // Initialize the application when DOM is loaded
