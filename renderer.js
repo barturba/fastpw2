@@ -4,6 +4,7 @@ let masterPassword = null;
 let selectedCompany = null;
 let selectedEntryIndex = null; // index into passwordEntries
 let companyContextMenuEl = null;
+let pendingRenameCompany = null;
 
 // DOM elements
 const companyList = document.getElementById('companyList');
@@ -35,6 +36,10 @@ const fieldsContainer = document.getElementById('fieldsContainer');
 const companyGroup = document.getElementById('companyGroup');
 const loginNameGroup = document.getElementById('loginNameGroup');
 const loginNameInput = document.getElementById('loginName');
+const renameCompanyModal = document.getElementById('renameCompanyModal');
+const renameCompanyInput = document.getElementById('renameCompanyInput');
+const renameCompanySaveBtn = document.getElementById('renameCompanySaveBtn');
+const renameCompanyCancelBtn = document.getElementById('renameCompanyCancelBtn');
 let modalMode = null; // 'addCompany' | 'addLogin' | 'edit' | null
 let modalTargetIndex = null; // used for addField/edit
 let formBaseline = null; // snapshot of form values for dirty check
@@ -329,33 +334,36 @@ function renderDetails() {
         revealBtn.innerHTML = '<span>▸</span><span>Reveal</span>';
         if (!secret) { revealBtn.style.display = 'none'; }
 
-        // Value
+        // Value + Copy click area
         const value = document.createElement('div');
         value.className = 'field-value';
         value.textContent = secret ? '••••••••' : field.value;
-        value.style.cursor = 'pointer';
-        value.title = 'Click to copy';
 
-        // Right: copy hint
         const copyHint = document.createElement('div');
         copyHint.className = 'copy-hint';
         copyHint.textContent = 'Copy';
 
-        value.addEventListener('click', async () => {
+        const copyContainer = document.createElement('div');
+        copyContainer.className = 'copy-container';
+        copyContainer.title = 'Click to copy';
+        copyContainer.addEventListener('click', async () => {
             await copyToClipboard(field.value);
             showToast(`${field.label} copied`);
         });
+        copyContainer.appendChild(value);
+        copyContainer.appendChild(copyHint);
 
-        revealBtn.addEventListener('click', () => {
+        revealBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             if (!secret) return;
             isRevealed = !isRevealed;
             value.textContent = isRevealed ? field.value : '••••••••';
             revealBtn.innerHTML = isRevealed ? '<span>▾</span><span>Hide</span>' : '<span>▸</span><span>Reveal</span>';
         });
 
+        // Order: copy area (value + Copy), then Reveal chevron on the far right
+        line.appendChild(copyContainer);
         line.appendChild(revealBtn);
-        line.appendChild(value);
-        line.appendChild(copyHint);
 
         row.appendChild(label);
         row.appendChild(line);
@@ -511,7 +519,6 @@ function saveEntry() {
             if (label && value) { fields.push({ label, value, type }); }
         }
     });
-    if (fields.length === 0) { alert('At least one field is required'); return; }
     const entry = { company, fields };
     if (loginName) entry.loginName = loginName;
     if (editingIndex >= 0) {
@@ -563,15 +570,11 @@ function showCompanyContextMenu(x, y, companyName) {
     editItem.className = 'context-menu-item';
     editItem.textContent = 'Edit Company Name';
     editItem.addEventListener('click', () => {
-        const newName = prompt('Enter new company name:', companyName);
-        if (newName && newName.trim() && newName.trim() !== companyName) {
-            const trimmed = newName.trim();
-            passwordEntries.forEach(e => { if (e.company === companyName) e.company = trimmed; });
-            selectedCompany = trimmed;
-            saveData();
-            renderCompanies();
-        }
+        pendingRenameCompany = companyName;
         hideCompanyContextMenu();
+        // open rename modal
+        renameCompanyInput.value = companyName;
+        renameCompanyModal.style.display = 'block';
     });
 
     const deleteItem = document.createElement('div');
@@ -725,6 +728,10 @@ document.querySelector('.close').addEventListener('click', () => attemptCloseEnt
 window.addEventListener('click', (event) => {
     if (event.target === entryModal) attemptCloseEntryModal();
     if (event.target === discardModal) discardModal.style.display = 'none';
+    if (event.target === renameCompanyModal) {
+        renameCompanyModal.style.display = 'none';
+        pendingRenameCompany = null;
+    }
 });
 
 // Add entity buttons handlers
@@ -772,6 +779,37 @@ editDetailsBtn.addEventListener('click', () => {
 
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', init);
+
+// ----- Dirty check helpers -----
+// Rename company modal handlers
+if (renameCompanyCancelBtn) {
+    renameCompanyCancelBtn.addEventListener('click', () => {
+        renameCompanyModal.style.display = 'none';
+        pendingRenameCompany = null;
+    });
+}
+const renameCloseEl = document.querySelector('.rename-close');
+if (renameCloseEl) {
+    renameCloseEl.addEventListener('click', () => {
+        renameCompanyModal.style.display = 'none';
+        pendingRenameCompany = null;
+    });
+}
+if (renameCompanySaveBtn) {
+    renameCompanySaveBtn.addEventListener('click', () => {
+        const newName = (renameCompanyInput.value || '').trim();
+        const oldName = pendingRenameCompany;
+        if (!oldName) { renameCompanyModal.style.display = 'none'; return; }
+        if (!newName) { alert('Company name cannot be empty'); return; }
+        if (newName === oldName) { renameCompanyModal.style.display = 'none'; return; }
+        passwordEntries.forEach(e => { if (e.company === oldName) e.company = newName; });
+        if (selectedCompany === oldName) selectedCompany = newName;
+        renameCompanyModal.style.display = 'none';
+        pendingRenameCompany = null;
+        saveData();
+        renderCompanies();
+    });
+}
 
 // ----- Dirty check helpers -----
 function captureFormSnapshot() {

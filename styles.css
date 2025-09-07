@@ -296,6 +296,14 @@ h1 {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
+.copy-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    cursor: pointer;
+}
+
 .copy-hint {
     opacity: 0;
     transition: opacity 150ms ease;
@@ -303,7 +311,7 @@ h1 {
     font-size: 12px;
 }
 
-.detail-field:hover .copy-hint { opacity: 1; }
+.copy-container:hover .copy-hint { opacity: 1; }
 
 /* Action buttons in table */
 .action-buttons { display: flex; gap: 5px; }

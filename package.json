@@ -1,6 +1,6 @@
 {
   "name": "fastpw2",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "A streamlined password manager app",
   "main": "main.js",
   "scripts": {
