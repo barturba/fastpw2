@@ -5,12 +5,60 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "postinstall": "electron-builder install-app-deps",
+    "build": "electron-builder",
+    "dist": "electron-builder -mwl",
+    "release": "electron-builder --publish onTagOrDraft"
   },
   "author": "barturba",
   "license": "MIT",
+  "build": {
+    "appId": "com.barturba.fastpw2",
+    "productName": "FastPW2",
+    "files": [
+      "**/*",
+      "!**/.git/**",
+      "!**/.github/**",
+      "!**/node_modules/.cache/**"
+    ],
+    "asar": true,
+    "publish": [
+      "github"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-${os}.${ext}"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility",
+      "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
+    }
+  },
   "devDependencies": {
-    "electron": "^25.0.0"
+    "electron": "^25.0.0",
+    "electron-builder": "^24.9.1"
   },
   "dependencies": {
     "crypto-js": "^4.1.1",

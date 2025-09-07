@@ -15,13 +15,8 @@ async function readCacheRecord() {
   try {
     const raw = await keytar.getPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
     if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed.value === 'string') return parsed;
-    } catch (_) {
-      // Backward compatibility: plain string stored previously
-      return { value: raw, lastUsedAt: 0 };
-    }
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.value === 'string') return parsed;
     return null;
   } catch (e) {
     return null;
@@ -40,7 +35,7 @@ async function getCachedMasterPassword() {
 }
 
 async function saveCachedMasterPassword(password) {
-  if (!password) return;
+  if (!password || typeof password !== 'string' || password.trim().length === 0) return;
   const record = JSON.stringify({ value: password, lastUsedAt: Date.now() });
   try {
     await keytar.setPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, record);
@@ -134,13 +129,14 @@ ipcMain.handle('save-data', async (event, data) => {
       return { success: false, error: 'Master password not set' };
     }
 
-    const crypto = new PasswordCrypto(data.masterPassword);
-
-    if (!crypto.verifyPassword(data.masterPassword, masterHash)) {
+    const cryptoVerifier = new PasswordCrypto(data.masterPassword);
+    if (!cryptoVerifier.verifyPassword(data.masterPassword, masterHash)) {
       return { success: false, error: 'Incorrect master password' };
     }
 
     // Encrypt and save data
+    const hashObj = JSON.parse(masterHash);
+    const crypto = new PasswordCrypto(data.masterPassword, { salt: hashObj.salt, iterations: hashObj.iterations });
     const encryptedData = crypto.encrypt(JSON.stringify(data.entries));
     await fs.writeFile(dataPath, encryptedData);
     // Refresh cache TTL on successful save
@@ -166,15 +162,16 @@ ipcMain.handle('load-data', async (event, masterPassword) => {
       return { success: true, data: [], needsSetup: true };
     }
 
-    const crypto = new PasswordCrypto(masterPassword);
-
-    if (!crypto.verifyPassword(masterPassword, masterHash)) {
+    const cryptoVerifier = new PasswordCrypto(masterPassword);
+    if (!cryptoVerifier.verifyPassword(masterPassword, masterHash)) {
       return { success: false, error: 'Incorrect master password' };
     }
 
     // Decrypt and load data
     try {
       const encryptedData = await fs.readFile(dataPath, 'utf8');
+      const hashObj = JSON.parse(masterHash);
+      const crypto = new PasswordCrypto(masterPassword, { salt: hashObj.salt, iterations: hashObj.iterations });
       const decryptedData = crypto.decrypt(encryptedData);
       // Refresh cache TTL on successful load
       touchCachedMasterPassword();
@@ -190,6 +187,9 @@ ipcMain.handle('load-data', async (event, masterPassword) => {
 
 ipcMain.handle('set-master-password', async (event, masterPassword) => {
   try {
+    if (!masterPassword || typeof masterPassword !== 'string' || masterPassword.trim().length < 8) {
+      return { success: false, error: 'Invalid master password' };
+    }
     const userDataPath = app.getPath('userData');
     const hashPath = path.join(userDataPath, 'master.hash');
     console.log('Setting master password. UserData path:', userDataPath);
@@ -203,8 +203,8 @@ ipcMain.handle('set-master-password', async (event, masterPassword) => {
     }
 
     const crypto = new PasswordCrypto(masterPassword);
-    const hash = crypto.hashPassword(masterPassword);
-    await fs.writeFile(hashPath, hash);
+    const hashObject = crypto.createNewHashObject();
+    await fs.writeFile(hashPath, JSON.stringify(hashObject, null, 2));
 
     // Verify the file was created
     const fileExists = await fs.access(hashPath).then(() => true).catch(() => false);
@@ -266,7 +266,9 @@ ipcMain.handle('cache-get-master', async () => {
 
 ipcMain.handle('cache-save-master', async (event, password) => {
   try {
-    if (!password) return { success: false, error: 'Missing password' };
+    if (!password || typeof password !== 'string' || password.trim().length === 0) {
+      return { success: false, error: 'Missing password' };
+    }
     await saveCachedMasterPassword(password);
     return { success: true };
   } catch (error) {
@@ -286,6 +288,22 @@ ipcMain.handle('cache-touch-master', async () => {
 ipcMain.handle('cache-clear-master', async () => {
   try {
     await clearCachedMasterPassword();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Window size control
+ipcMain.handle('set-window-size', async (event, args) => {
+  try {
+    const { width, height, center } = args || {};
+    const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+    if (!win || typeof width !== 'number' || typeof height !== 'number') {
+      return { success: false, error: 'Invalid window or size' };
+    }
+    win.setSize(Math.max(320, Math.floor(width)), Math.max(240, Math.floor(height)));
+    if (center) { win.center(); }
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };

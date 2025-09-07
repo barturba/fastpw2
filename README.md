@@ -4,7 +4,7 @@ A secure, desktop password manager built with Electron that stores your password
 
 ## Features
 
-- **Secure Storage**: All passwords are encrypted using AES encryption
+- **Secure Storage**: AES-256 encryption; key derived via PBKDF2 (SHA-256, 200k iterations)
 - **Master Password**: Single master password protects all your stored credentials
 - **Two-Column Layout**:
   - Company: The service/website name
@@ -25,13 +25,41 @@ A secure, desktop password manager built with Electron that stores your password
    npm start
    ```
 
+## Packaging / Distribution
+
+- Local builds:
+  - macOS/Linux/Windows targets from any platform:
+    ```bash
+    npm run dist
+    ```
+  - To publish on GitHub Releases when pushing a tag:
+    ```bash
+    git tag v1.3.1 && git push origin v1.3.1
+    ```
+    The CI will run and upload assets.
+
+### Build Scripts
+
+- `npm run build`: Run electron-builder for current OS
+- `npm run dist`: Build for macOS, Windows and Linux (`-mwl`)
+- `npm run release`: Build and publish on tag or draft (needs `GH_TOKEN`)
+
+### CI (GitHub Actions)
+
+A workflow at `.github/workflows/release.yml` builds on macOS, Windows, and Linux.
+
+- On branch pushes: it builds installers and uploads them as workflow artifacts
+- On tags starting with `v*`: it publishes to GitHub Releases
+
+No additional secrets are needed; `GITHUB_TOKEN` is provided automatically.
+
 ## Usage
 
 ### First Time Setup
-1. When you first run the app, you'll see a login screen
-2. Click "Setup New Password" to create your master password
-3. Choose a strong master password (minimum 8 characters)
-4. Your password database will be created and encrypted
+1. On first run (no master password yet), you will be taken to a dedicated setup screen.
+2. Enter your master password twice to confirm (minimum 8 characters).
+3. After creation, you'll be taken into the app. The password will be stored in a secure 14‑day keychain cache for convenience.
+4. If a master password already exists, you'll see the login screen instead.
 
 ### Adding Password Entries
 1. Click "Add New Entry" in the main interface
@@ -46,10 +74,11 @@ A secure, desktop password manager built with Electron that stores your password
 - **View Passwords**: Click on password fields to toggle visibility
 
 ### Security Notes
-- Your master password is never stored - only a hash is kept for verification
-- All password data is encrypted using AES encryption
+- Your master password is never stored — a PBKDF2-derived verifier (JSON with salt, iterations, hash) is kept
+- All password data is encrypted using AES-256 with a random IV; keys derived via PBKDF2-SHA256 (200k iters)
 - Data is stored locally in your user data directory
 - No data is sent to external servers
+- No legacy compatibility: older non-PBKDF2 formats are not supported
 
 ## Development
 
@@ -68,14 +97,14 @@ fastpw2/
 
 ### Technologies Used
 - **Electron**: Cross-platform desktop app framework
-- **CryptoJS**: AES encryption for password security
+- **CryptoJS**: PBKDF2 (SHA-256) key derivation and AES-256 encryption
 - **HTML/CSS/JavaScript**: Frontend interface
 
 ## Security Considerations
 
 This is a basic password manager for demonstration purposes. For production use, consider:
 
-- Using more secure encryption methods (like PBKDF2 for key derivation)
+- Increasing PBKDF2 iterations over time and providing in-app migration
 - Implementing password strength requirements
 - Adding backup/export functionality
 - Using a more robust database solution

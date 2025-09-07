@@ -13,13 +13,15 @@ const detailsView = document.getElementById('detailsView');
 const detailsHeaderTitle = document.getElementById('detailsHeaderTitle');
 const toastEl = document.getElementById('toast');
 const loginScreen = document.getElementById('loginScreen');
+const setupScreen = document.getElementById('setupScreen');
 const mainApp = document.getElementById('mainApp');
 const masterPasswordInput = document.getElementById('masterPassword');
-const confirmPasswordInput = document.getElementById('confirmPassword');
-const confirmPasswordLabel = document.getElementById('confirmPasswordLabel');
+const setupMasterPasswordInput = document.getElementById('setupMasterPassword');
+const setupConfirmPasswordInput = document.getElementById('setupConfirmPassword');
 const loginBtn = document.getElementById('loginBtn');
-const setupPasswordBtn = document.getElementById('setupPasswordBtn');
 const loginMessage = document.getElementById('loginMessage');
+const setupMessage = document.getElementById('setupMessage');
+const createMasterBtn = document.getElementById('createMasterBtn');
 const addCompanyBtn = document.getElementById('addCompanyBtn');
 const newItemBtn = document.getElementById('newItemBtn');
 const editDetailsBtn = document.getElementById('editDetailsBtn');
@@ -60,32 +62,49 @@ async function init() {
     } catch (e) {
         // Fall through to login screen
     }
+    // Determine whether to show setup or login based on presence of master hash
+    try {
+        const debugInfo = await window.electronAPI.debugHashFile();
+        if (debugInfo && debugInfo.success && debugInfo.exists === false) {
+            showSetupScreen();
+            return;
+        }
+    } catch (_) {}
     showLoginScreen();
 }
 
 // Show login screen
 function showLoginScreen() {
     loginScreen.style.display = 'flex';
+    if (setupScreen) setupScreen.style.display = 'none';
     mainApp.style.display = 'none';
-
-    // Reset UI to default login state
-    confirmPasswordInput.style.display = 'none';
-    confirmPasswordLabel.style.display = 'none';
-    loginBtn.style.display = 'block';
-    setupPasswordBtn.textContent = 'Setup New Password';
 
     // Clear inputs
     masterPasswordInput.value = '';
-    confirmPasswordInput.value = '';
 
     masterPasswordInput.focus();
+    try { window.electronAPI.setWindowSize(520, 420, true); } catch (_) {}
 }
 
 // Show main application
 function showMainApp() {
     loginScreen.style.display = 'none';
+    if (setupScreen) setupScreen.style.display = 'none';
     mainApp.style.display = 'block';
     renderCompanies();
+    try { window.electronAPI.setWindowSize(1200, 800, false); } catch (_) {}
+}
+
+// Show setup screen
+function showSetupScreen() {
+    if (loginScreen) loginScreen.style.display = 'none';
+    if (mainApp) mainApp.style.display = 'none';
+    if (setupScreen) setupScreen.style.display = 'flex';
+
+    if (setupMasterPasswordInput) setupMasterPasswordInput.value = '';
+    if (setupConfirmPasswordInput) setupConfirmPasswordInput.value = '';
+    if (setupMasterPasswordInput) setupMasterPasswordInput.focus();
+    try { window.electronAPI.setWindowSize(520, 460, true); } catch (_) {}
 }
 
 // Utilities: clipboard + toast
@@ -126,6 +145,10 @@ async function loadData(password) {
         const result = await window.electronAPI.loadData(password);
         if (result.success) {
             passwordEntries = result.data;
+            if (result.needsSetup) {
+                showSetupScreen();
+                return false;
+            }
             return true;
         } else {
             showLoginMessage(result.error, 'error');
@@ -150,6 +173,16 @@ function showLoginMessage(message, type = 'error') {
     }, 3000);
 }
 
+function showSetupMessage(message, type = 'error') {
+    if (!setupMessage) return;
+    setupMessage.textContent = message;
+    setupMessage.className = `login-message ${type}`;
+    setupMessage.style.display = 'block';
+    setTimeout(() => {
+        setupMessage.style.display = 'none';
+    }, 3000);
+}
+
 // Save data to storage
 async function saveData() {
     try {
@@ -158,14 +191,9 @@ async function saveData() {
 
         // Check if master password is set
         if (!masterPassword) {
-            const shouldSetup = confirm('No master password is set. Would you like to set up a master password now to secure your data?');
-            if (shouldSetup) {
-                await promptMasterPasswordSetup();
-                return; // Don't proceed with saving until master password is set
-            } else {
-                alert('Master password is required to save data. Please set up a master password first.');
-                return;
-            }
+            showSetupScreen();
+            showSetupMessage('Set a master password to save your data.', 'error');
+            return;
         }
 
         const dataToSave = {
@@ -187,23 +215,7 @@ async function saveData() {
     }
 }
 
-// Prompt user to set up master password
-async function promptMasterPasswordSetup() {
-    // Show setup mode with confirmation field
-    confirmPasswordInput.style.display = 'block';
-    confirmPasswordLabel.style.display = 'block';
-    loginBtn.style.display = 'none';
-    setupPasswordBtn.textContent = 'Create Master Password';
-
-    // Clear any previous messages
-    loginMessage.style.display = 'none';
-
-    // Focus on password input
-    masterPasswordInput.focus();
-
-    showLoginScreen();
-    showLoginMessage('Please create a master password to secure your data.', 'success');
-}
+// Removed inline setup flow in favor of dedicated setup screen
 
 // ---------- Three-column rendering ----------
 function getCompanies() {
@@ -641,59 +653,45 @@ async function handleLogin() {
     }
 }
 
-async function handleSetupPassword() {
-    const password = masterPasswordInput.value.trim();
-    const confirmPassword = confirmPasswordInput.value.trim();
+async function handleCreateMaster() {
+    const password = (setupMasterPasswordInput ? setupMasterPasswordInput.value : '').trim();
+    const confirmPassword = (setupConfirmPasswordInput ? setupConfirmPasswordInput.value : '').trim();
 
     if (!password) {
-        showLoginMessage('Please enter a master password', 'error');
+        showSetupMessage('Please enter a master password', 'error');
         return;
     }
 
     if (password.length < 8) {
-        showLoginMessage('Master password must be at least 8 characters', 'error');
+        showSetupMessage('Master password must be at least 8 characters', 'error');
         return;
     }
 
-    // Check if confirmation is required (when in setup mode)
-    if (confirmPasswordInput.style.display !== 'none') {
-        if (!confirmPassword) {
-            showLoginMessage('Please confirm your master password', 'error');
-            return;
-        }
+    if (!confirmPassword) {
+        showSetupMessage('Please confirm your master password', 'error');
+        return;
+    }
 
-        if (password !== confirmPassword) {
-            showLoginMessage('Passwords do not match. Please try again.', 'error');
-            return;
-        }
+    if (password !== confirmPassword) {
+        showSetupMessage('Passwords do not match. Please try again.', 'error');
+        return;
     }
 
     try {
         const result = await window.electronAPI.setMasterPassword(password);
         if (result.success) {
             masterPassword = password;
-            console.log('Master password set successfully in renderer:', !!masterPassword);
-
-            // Clear inputs
-            masterPasswordInput.value = '';
-            confirmPasswordInput.value = '';
-
-            // Reset UI to normal state
-            confirmPasswordInput.style.display = 'none';
-            confirmPasswordLabel.style.display = 'none';
-            loginBtn.style.display = 'block';
-            setupPasswordBtn.textContent = 'Setup New Password';
-
+            if (setupMasterPasswordInput) setupMasterPasswordInput.value = '';
+            if (setupConfirmPasswordInput) setupConfirmPasswordInput.value = '';
             showMainApp();
-            showLoginMessage('Master password set successfully!', 'success');
-            // The main process also saved to cache, but ensure consistency
+            showToast('Master password set successfully!');
             try { await window.electronAPI.cacheSaveMaster(masterPassword); } catch (_) {}
         } else {
-            showLoginMessage('Error setting master password', 'error');
+            showSetupMessage('Error setting master password', 'error');
         }
     } catch (error) {
         console.error('Error setting master password:', error);
-        showLoginMessage('Error setting master password', 'error');
+        showSetupMessage('Error setting master password', 'error');
     }
 }
 
@@ -708,26 +706,30 @@ function handleLogout() {
 
 // Event listeners
 loginBtn.addEventListener('click', handleLogin);
-setupPasswordBtn.addEventListener('click', handleSetupPassword);
 // logout removed
 masterPasswordInput.addEventListener('keypress', (event) => {
     if (event.key === 'Enter') {
-        // If confirmation is visible, focus on it, otherwise proceed with login/setup
-        if (confirmPasswordInput.style.display !== 'none') {
-            confirmPasswordInput.focus();
-        } else if (loginBtn.style.display !== 'none') {
-            handleLogin();
-        } else {
-            handleSetupPassword();
-        }
+        handleLogin();
     }
 });
 
-confirmPasswordInput.addEventListener('keypress', (event) => {
-    if (event.key === 'Enter') {
-        handleSetupPassword();
-    }
-});
+if (setupMasterPasswordInput) {
+    setupMasterPasswordInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            if (setupConfirmPasswordInput) setupConfirmPasswordInput.focus();
+        }
+    });
+}
+if (setupConfirmPasswordInput) {
+    setupConfirmPasswordInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            handleCreateMaster();
+        }
+    });
+}
+if (createMasterBtn) {
+    createMasterBtn.addEventListener('click', handleCreateMaster);
+}
 
 // addEntry removed
 addFieldBtn.addEventListener('click', () => addFieldInput());

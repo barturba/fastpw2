@@ -11,5 +11,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cacheGetMaster: () => ipcRenderer.invoke('cache-get-master'),
   cacheSaveMaster: (password) => ipcRenderer.invoke('cache-save-master', password),
   cacheTouchMaster: () => ipcRenderer.invoke('cache-touch-master'),
-  cacheClearMaster: () => ipcRenderer.invoke('cache-clear-master')
+  cacheClearMaster: () => ipcRenderer.invoke('cache-clear-master'),
+  setWindowSize: (width, height, center = true) => ipcRenderer.invoke('set-window-size', { width, height, center })
 });

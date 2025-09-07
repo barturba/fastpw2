@@ -16,15 +16,31 @@
                     <label for="masterPassword">Master Password:</label>
                     <input type="password" id="masterPassword" placeholder="Enter your master password" required>
                 </div>
-                <div class="form-group">
-                    <label for="confirmPassword" id="confirmPasswordLabel" style="display: none;">Confirm Master Password:</label>
-                    <input type="password" id="confirmPassword" placeholder="Confirm your master password" style="display: none;">
-                </div>
                 <div class="login-buttons">
                     <button id="loginBtn" class="btn btn-primary">Login</button>
-                    <button id="setupPasswordBtn" class="btn btn-secondary">Setup New Password</button>
                 </div>
                 <div id="loginMessage" class="login-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Setup Screen -->
+    <div id="setupScreen" class="login-screen" style="display: none;">
+        <div class="login-container">
+            <h1>Create Master Password</h1>
+            <div class="login-form">
+                <div class="form-group">
+                    <label for="setupMasterPassword">Master Password:</label>
+                    <input type="password" id="setupMasterPassword" placeholder="Enter a strong master password" required>
+                </div>
+                <div class="form-group">
+                    <label for="setupConfirmPassword">Confirm Master Password:</label>
+                    <input type="password" id="setupConfirmPassword" placeholder="Confirm your master password" required>
+                </div>
+                <div class="login-buttons">
+                    <button id="createMasterBtn" class="btn btn-primary">Create Master Password</button>
+                </div>
+                <div id="setupMessage" class="login-message"></div>
             </div>
         </div>
     </div>
