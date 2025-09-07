@@ -851,7 +851,10 @@ addCompanyBtn.addEventListener('click', () => {
     companyInput.disabled = false;
     companyInput.value = '';
     if (loginNameGroup) loginNameGroup.style.display = 'none';
-    if (fieldsContainer) fieldsContainer.style.display = 'none';
+    if (fieldsContainer) {
+        fieldsContainer.innerHTML = '';
+        fieldsContainer.style.display = 'none';
+    }
     addFieldBtn.style.display = 'none';
     deleteLoginBtn.style.display = 'none'; // Ensure delete button is hidden
     entryModal.style.display = 'block';
@@ -873,8 +876,16 @@ newItemBtn.addEventListener('click', () => {
         loginNameInput.value = '';
         loginNameInput.disabled = false;
     }
-    if (fieldsContainer) fieldsContainer.style.display = 'none';
+    if (fieldsContainer) {
+        fieldsContainer.innerHTML = '';
+        fieldsContainer.style.display = 'none';
+    }
     addFieldBtn.style.display = 'none';
+    // Hide delete button in Add Login mode
+    if (deleteLoginBtn) {
+        deleteLoginBtn.style.display = 'none';
+        deleteLoginBtn.onclick = null;
+    }
     entryModal.style.display = 'block';
     focusFirstEnabledInput(entryModal);
     initFocusTrap(entryModal);

@@ -10,9 +10,11 @@ let mainWindow;
 const KEYCHAIN_SERVICE = app.getName ? app.getName() : 'fastpw2';
 const KEYCHAIN_ACCOUNT = 'master-password';
 const CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const CACHE_ENABLED = process.env.FASTPW2_ENABLE_CACHE === '1';
 
 async function readCacheRecord() {
   try {
+    if (!CACHE_ENABLED) return null;
     const raw = await keytar.getPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
@@ -28,13 +30,14 @@ async function getCachedMasterPassword() {
   if (!rec) return null;
   const lastUsedAt = typeof rec.lastUsedAt === 'number' ? rec.lastUsedAt : 0;
   if (Date.now() - lastUsedAt > CACHE_TTL_MS) {
-    try { await keytar.deletePassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT); } catch (_) {}
+    try { if (CACHE_ENABLED) { await keytar.deletePassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT); } } catch (_) {}
     return null;
   }
   return rec.value;
 }
 
 async function saveCachedMasterPassword(password) {
+  if (!CACHE_ENABLED) return;
   if (!password || typeof password !== 'string' || password.trim().length === 0) return;
   const record = JSON.stringify({ value: password, lastUsedAt: Date.now() });
   try {
@@ -47,13 +50,17 @@ async function touchCachedMasterPassword() {
   if (!rec) return;
   rec.lastUsedAt = Date.now();
   try {
-    await keytar.setPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, JSON.stringify(rec));
+    if (CACHE_ENABLED) {
+      await keytar.setPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, JSON.stringify(rec));
+    }
   } catch (_) {}
 }
 
 async function clearCachedMasterPassword() {
   try {
-    await keytar.deletePassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
+    if (CACHE_ENABLED) {
+      await keytar.deletePassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
+    }
   } catch (_) {}
 }
 
@@ -65,16 +72,21 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      webviewTag: false,
+      nodeIntegrationInWorker: false,
+      nodeIntegrationInSubFrames: false
     },
     icon: path.join(__dirname, 'assets/icon.png'), // Optional icon
     show: false
   });
 
   // Log the user data path for debugging
-  console.log('App userData path:', app.getPath('userData'));
-  console.log('App path:', app.getAppPath());
-  console.log('App name:', app.getName());
+  if (process.env.NODE_ENV === 'development') {
+    console.log('App userData path:', app.getPath('userData'));
+    console.log('App path:', app.getAppPath());
+    console.log('App name:', app.getName());
+  }
 
   mainWindow.loadFile('index.html');
 
@@ -88,6 +100,14 @@ function createWindow() {
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools();
   }
+
+  // Disallow external navigation and window opens
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url || !url.startsWith('file://')) {
+      event.preventDefault();
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -117,17 +137,23 @@ ipcMain.handle('save-data', async (event, data) => {
     const dataPath = path.join(userDataPath, 'passwords.enc');
     const hashPath = path.join(userDataPath, 'master.hash');
 
-    console.log('Saving data. UserData path:', userDataPath);
-    console.log('Hash file path:', hashPath);
-    console.log('Master password provided:', !!data.masterPassword);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Saving data. UserData path:', userDataPath);
+      console.log('Hash file path:', hashPath);
+      console.log('Master password provided:', !!data.masterPassword);
+    }
 
     // Check if master password is set
     let masterHash;
     try {
       masterHash = await fs.readFile(hashPath, 'utf8');
-      console.log('Master hash read successfully');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Master hash read successfully');
+      }
     } catch (error) {
-      console.error('Error reading master hash file:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error reading master hash file:', error);
+      }
       return { success: false, error: 'Master password not set' };
     }
 
@@ -140,7 +166,10 @@ ipcMain.handle('save-data', async (event, data) => {
     const hashObj = JSON.parse(masterHash);
     const crypto = new PasswordCrypto(data.masterPassword, { salt: hashObj.salt, iterations: hashObj.iterations });
     const encryptedData = crypto.encrypt(JSON.stringify(data.entries));
-    await fs.writeFile(dataPath, encryptedData);
+    // Ensure directory exists
+    try { await fs.mkdir(userDataPath, { recursive: true }); } catch (_) {}
+    await fs.writeFile(dataPath, encryptedData, { mode: 0o600 });
+    try { await fs.chmod(dataPath, 0o600); } catch (_) {}
     // Refresh cache TTL on successful save
     touchCachedMasterPassword();
 
@@ -194,23 +223,30 @@ ipcMain.handle('set-master-password', async (event, masterPassword) => {
     }
     const userDataPath = app.getPath('userData');
     const hashPath = path.join(userDataPath, 'master.hash');
-    console.log('Setting master password. UserData path:', userDataPath);
-    console.log('Hash file path:', hashPath);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Setting master password. UserData path:', userDataPath);
+      console.log('Hash file path:', hashPath);
+    }
 
     // Ensure the userData directory exists
     try {
       await fs.mkdir(userDataPath, { recursive: true });
     } catch (mkdirError) {
-      console.log('UserData directory already exists or error creating:', mkdirError.message);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('UserData directory already exists or error creating:', mkdirError.message);
+      }
     }
 
     const crypto = new PasswordCrypto(masterPassword);
     const hashObject = crypto.createNewHashObject();
-    await fs.writeFile(hashPath, JSON.stringify(hashObject, null, 2));
+    await fs.writeFile(hashPath, JSON.stringify(hashObject, null, 2), { mode: 0o600 });
+    try { await fs.chmod(hashPath, 0o600); } catch (_) {}
 
     // Verify the file was created
     const fileExists = await fs.access(hashPath).then(() => true).catch(() => false);
-    console.log('Hash file created successfully:', fileExists);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Hash file created successfully:', fileExists);
+    }
 
     // Store in keychain for 14-day cache
     await saveCachedMasterPassword(masterPassword);
@@ -235,6 +271,9 @@ ipcMain.handle('verify-master-password', async (event, masterPassword) => {
 
 ipcMain.handle('debug-hash-file', async () => {
   try {
+    if (process.env.NODE_ENV !== 'development') {
+      return { success: false, error: 'Not available in production' };
+    }
     const hashPath = path.join(app.getPath('userData'), 'master.hash');
     const exists = await fs.access(hashPath).then(() => true).catch(() => false);
     let hashContent = null;
@@ -259,6 +298,7 @@ ipcMain.handle('debug-hash-file', async () => {
 // Keychain cache IPC endpoints
 ipcMain.handle('cache-get-master', async () => {
   try {
+    if (!CACHE_ENABLED) return { success: true, value: null };
     const value = await getCachedMasterPassword();
     return { success: true, value };
   } catch (error) {
@@ -268,6 +308,7 @@ ipcMain.handle('cache-get-master', async () => {
 
 ipcMain.handle('cache-save-master', async (event, password) => {
   try {
+    if (!CACHE_ENABLED) return { success: true };
     if (!password || typeof password !== 'string' || password.trim().length === 0) {
       return { success: false, error: 'Missing password' };
     }
@@ -280,6 +321,7 @@ ipcMain.handle('cache-save-master', async (event, password) => {
 
 ipcMain.handle('cache-touch-master', async () => {
   try {
+    if (!CACHE_ENABLED) return { success: true };
     await touchCachedMasterPassword();
     return { success: true };
   } catch (error) {
@@ -289,6 +331,7 @@ ipcMain.handle('cache-touch-master', async () => {
 
 ipcMain.handle('cache-clear-master', async () => {
   try {
+    if (!CACHE_ENABLED) return { success: true };
     await clearCachedMasterPassword();
     return { success: true };
   } catch (error) {
