@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ipc, type PasswordEntry } from '@/lib/ipc';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 
 export function MainScreen({
@@ -138,6 +139,7 @@ export function MainScreen({
   function remove(id: string) {
     setEntries((prev) => prev.filter((p) => p.id !== id));
     if (selectedEntryId === id) setSelectedEntryId(null);
+    toast({ title: 'Deleted' });
   }
 
   return (
@@ -205,12 +207,17 @@ export function MainScreen({
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">{selectedEntry?.name || 'Details'}</CardTitle>
               {selectedEntry && (
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => copy(selectedEntry.username, 'Username')}>Copy user</Button>
-                  <Button variant="outline" onClick={() => copy(selectedEntry.password, 'Password')}>Copy pass</Button>
-                  <Button variant="secondary" onClick={() => openEdit(selectedEntry)}>Edit</Button>
-                  <Button variant="destructive" onClick={() => remove(selectedEntry.id)}>Delete</Button>
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">Actions</Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => copy(selectedEntry.username, 'Username')}>Copy username</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => copy(selectedEntry.password, 'Password')}>Copy password</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openEdit(selectedEntry)}>Edit</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => remove(selectedEntry.id)}>Delete</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </CardHeader>
             <CardContent>
