@@ -1,13 +1,14 @@
 {
   "name": "fastpw2",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "A lightweight, local-first password manager. AES-256 encryption. No cloud storage. No telemetry.",
   "main": "main.js",
   "scripts": {
     "start": "FASTPW2_ENABLE_CACHE=1 electron .",
     "dev": "FASTPW2_ENABLE_CACHE=1 electron .",
-    "dev:renderer": "cd renderer && npm run dev",
-    "dev:electron": "FASTPW2_RENDERER_DEV=1 NODE_ENV=development FASTPW2_ENABLE_CACHE=1 electron .",
+    "dev:renderer": "cd renderer && vite --port 5175",
+    "dev:electron": "wait-on http://localhost:5175 && FASTPW2_RENDERER_DEV=1 FASTPW2_RENDERER_URL=http://localhost:5175 NODE_ENV=development FASTPW2_ENABLE_CACHE=1 electron .",
+    "dev:all": "concurrently -k -n vite,electron -c blue,green \"npm:dev:renderer\" \"npm:dev:electron\"",
     "build:renderer": "cd renderer && npm run build",
     "postinstall": "electron-builder install-app-deps",
     "build": "electron-builder",
@@ -64,11 +65,13 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
     "electron": "^25.0.0",
     "electron-builder": "^24.9.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.13",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "wait-on": "^8.0.4"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

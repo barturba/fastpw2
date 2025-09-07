@@ -1,20 +1,40 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
-import { Button } from './components/ui/button'
+import { Toaster } from '@/components/ui/toaster'
+import { SetupScreen } from '@/pages/Setup'
+import { LoginScreen } from '@/pages/Login'
+import { MainScreen } from '@/pages/Main'
+import { ipc, type PasswordEntry } from '@/lib/ipc'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null)
+  const [entries, setEntries] = useState<PasswordEntry[] | null>(null)
+  const [masterPassword, setMasterPassword] = useState<string | null>(null)
+
+  useEffect(() => {
+    (async () => {
+      const res = await ipc.checkFirstRun()
+      if (res?.success) {
+        setNeedsSetup(!res.exists)
+      } else {
+        setNeedsSetup(true)
+      }
+    })()
+  }, [])
+
+  if (needsSetup === null) return null
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-semibold">shadcn/ui + Tailwind in Electron</h1>
-      <div className="flex items-center gap-2">
-        <Button onClick={() => setCount((c) => c + 1)}>Count: {count}</Button>
-        <Button variant="secondary">Secondary</Button>
-        <Button variant="outline">Outline</Button>
-      </div>
-      <p className="text-sm text-muted-foreground">Edit src/App.tsx to continue.</p>
-    </div>
+    <>
+      {needsSetup ? (
+        <SetupScreen onDone={() => setNeedsSetup(false)} />
+      ) : entries && masterPassword ? (
+        <MainScreen initialEntries={entries} masterPassword={masterPassword} />
+      ) : (
+        <LoginScreen onLoaded={(data, pw) => { setEntries(data); setMasterPassword(pw) }} />
+      )}
+      <Toaster />
+    </>
   )
 }
 
