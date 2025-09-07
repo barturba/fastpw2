@@ -194,6 +194,10 @@ h1 {
     background: #f3f4f6;
 }
 
+.icon-btn:focus-visible {
+    border-color: #2563eb;
+}
+
 .list {
     list-style: none;
     padding: 8px 0;
@@ -243,6 +247,11 @@ h1 {
 
 .list-item.active {
     background-color: #e8f3fe;
+}
+
+.list-item:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: -2px;
 }
 
 .details {
@@ -423,6 +432,25 @@ h1 {
     outline: none;
     border-color: #3498db;
     box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
+}
+
+/* Explicit focus ring for keyboard users */
+:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+
+.btn:focus-visible,
+.icon-btn:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+}
+
+/* Ensure modal content gets focus outline context */
+.modal[aria-modal="true"] .modal-content:focus {
+    outline: none;
 }
 
 /* Field groups */

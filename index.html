@@ -71,11 +71,11 @@
         </div>
 
         <!-- Add/Edit Entry Modal -->
-        <div id="entryModal" class="modal">
+        <div id="entryModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
             <div class="modal-content">
                 <div class="modal-header">
                     <h2 id="modalTitle">Add New Entry</h2>
-                    <span class="close">&times;</span>
+                    <span class="close" role="button" tabindex="0" aria-label="Close">&times;</span>
                 </div>
                 <div class="modal-body">
                     <form id="entryForm">
@@ -105,19 +105,19 @@
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" id="deleteLogin" class="btn btn-danger" style="display: none;">Delete Login</button>
-                    <button type="button" id="saveEntry" class="btn btn-primary">Save</button>
-                    <button type="button" id="cancelEntry" class="btn btn-secondary">Cancel</button>
+                    <button type="button" id="deleteLogin" class="btn btn-danger" style="display: none;" title="Delete this login">Delete Login</button>
+                    <button type="submit" id="saveEntry" class="btn btn-primary" form="entryForm" title="Save (Enter or Cmd/Ctrl+S)">Save</button>
+                    <button type="button" id="cancelEntry" class="btn btn-secondary" title="Cancel (Esc)">Cancel</button>
                 </div>
             </div>
         </div>
         
         <!-- Discard Changes Modal -->
-        <div id="discardModal" class="modal">
+        <div id="discardModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="discardTitle">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Discard changes?</h2>
-                    <span class="close discard-close">&times;</span>
+                    <h2 id="discardTitle">Discard changes?</h2>
+                    <span class="close discard-close" role="button" tabindex="0" aria-label="Close">&times;</span>
                 </div>
                 <div class="modal-body">
                     <p>You have unsaved changes. If you continue, your edits will be lost.</p>
@@ -130,11 +130,11 @@
         </div>
 
         <!-- Rename Company Modal -->
-        <div id="renameCompanyModal" class="modal">
+        <div id="renameCompanyModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="renameCompanyTitle">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Rename company</h2>
-                    <span class="close rename-close">&times;</span>
+                    <h2 id="renameCompanyTitle">Rename company</h2>
+                    <span class="close rename-close" role="button" tabindex="0" aria-label="Close">&times;</span>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
@@ -143,8 +143,8 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" id="renameCompanySaveBtn" class="btn btn-primary">Save</button>
-                    <button type="button" id="renameCompanyCancelBtn" class="btn btn-secondary">Cancel</button>
+                    <button type="button" id="renameCompanySaveBtn" class="btn btn-primary" title="Save (Enter)">Save</button>
+                    <button type="button" id="renameCompanyCancelBtn" class="btn btn-secondary" title="Cancel (Esc)">Cancel</button>
                 </div>
             </div>
         </div>

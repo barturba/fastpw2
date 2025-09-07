@@ -46,6 +46,69 @@ let modalMode = null; // 'addCompany' | 'addLogin' | 'edit' | null
 let modalTargetIndex = null; // used for addField/edit
 let formBaseline = null; // snapshot of form values for dirty check
 
+// ---------- UX utilities ----------
+const modalPrevFocus = new WeakMap();
+
+function getFocusableElements(container) {
+    if (!container) return [];
+    const selector = [
+        'a[href]', 'area[href]', 'input:not([disabled]):not([type="hidden"])',
+        'select:not([disabled])', 'textarea:not([disabled])', 'button:not([disabled])',
+        'iframe', 'object', 'embed', '[tabindex]:not([tabindex="-1"])', '[contenteditable]'
+    ].join(',');
+    const nodes = Array.from(container.querySelectorAll(selector));
+    return nodes.filter(el => el.offsetParent !== null);
+}
+
+function focusFirstEnabledInput(container) {
+    const focusables = getFocusableElements(container);
+    const firstInput = focusables.find(el => /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+    const target = firstInput || focusables[0];
+    if (target && typeof target.focus === 'function') {
+        try { target.focus(); if (target.select) target.select(); } catch (_) {}
+    }
+}
+
+function initFocusTrap(modalEl) {
+    if (!modalEl || modalEl.__trapHandler) return;
+    modalPrevFocus.set(modalEl, document.activeElement || null);
+    const handler = (e) => {
+        if (e.key !== 'Tab') return;
+        const focusables = getFocusableElements(modalEl);
+        if (focusables.length === 0) { e.preventDefault(); return; }
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const current = document.activeElement;
+        if (e.shiftKey) {
+            if (current === first || !modalEl.contains(current)) {
+                e.preventDefault();
+                last.focus();
+            }
+        } else {
+            if (current === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        }
+    };
+    modalEl.addEventListener('keydown', handler);
+    modalEl.__trapHandler = handler;
+}
+
+function removeFocusTrap(modalEl) {
+    if (!modalEl) return;
+    const handler = modalEl.__trapHandler;
+    if (handler) {
+        modalEl.removeEventListener('keydown', handler);
+        delete modalEl.__trapHandler;
+    }
+    const prev = modalPrevFocus.get(modalEl);
+    if (prev && typeof prev.focus === 'function') {
+        try { prev.focus(); } catch (_) {}
+    }
+    modalPrevFocus.delete(modalEl);
+}
+
 // Initialize the application
 async function init() {
     // Attempt auto-login using secure 14-day cache
@@ -426,6 +489,8 @@ function showModal(isEditing = false, entry = null) {
     }
 
     entryModal.style.display = 'block';
+    focusFirstEnabledInput(entryModal);
+    initFocusTrap(entryModal);
 }
 
 // Hide modal
@@ -433,6 +498,7 @@ function hideModal() {
     entryModal.style.display = 'none';
     editingIndex = -1;
     formBaseline = null;
+    removeFocusTrap(entryModal);
 }
 
 // Utility to map type to default label
@@ -592,6 +658,8 @@ function showCompanyContextMenu(x, y, companyName) {
         // open rename modal
         renameCompanyInput.value = companyName;
         renameCompanyModal.style.display = 'block';
+        focusFirstEnabledInput(renameCompanyModal);
+        initFocusTrap(renameCompanyModal);
     });
 
     const deleteItem = document.createElement('div');
@@ -734,15 +802,32 @@ if (createMasterBtn) {
 // addEntry removed
 addFieldBtn.addEventListener('click', () => addFieldInput());
 saveEntryBtn.addEventListener('click', saveEntry);
+// Allow Enter to submit the modal form
+if (entryForm) {
+    entryForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        saveEntry();
+    });
+}
 cancelEntryBtn.addEventListener('click', () => attemptCloseEntryModal());
 
 // Close modal when clicking outside or on close button
 document.querySelector('.close').addEventListener('click', () => attemptCloseEntryModal());
+// Make close controls keyboard-activatable (Enter/Space)
+try {
+    const allCloseEls = document.querySelectorAll('.close');
+    allCloseEls.forEach(el => {
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
+        });
+    });
+} catch (_) {}
 window.addEventListener('click', (event) => {
     if (event.target === entryModal) attemptCloseEntryModal();
-    if (event.target === discardModal) discardModal.style.display = 'none';
+    if (event.target === discardModal) { discardModal.style.display = 'none'; removeFocusTrap(discardModal); }
     if (event.target === renameCompanyModal) {
         renameCompanyModal.style.display = 'none';
+        removeFocusTrap(renameCompanyModal);
         pendingRenameCompany = null;
     }
 });
@@ -760,6 +845,8 @@ addCompanyBtn.addEventListener('click', () => {
     if (fieldsContainer) fieldsContainer.style.display = 'none';
     addFieldBtn.style.display = 'none';
     entryModal.style.display = 'block';
+    focusFirstEnabledInput(entryModal);
+    initFocusTrap(entryModal);
 });
 
 newItemBtn.addEventListener('click', () => {
@@ -779,6 +866,8 @@ newItemBtn.addEventListener('click', () => {
     if (fieldsContainer) fieldsContainer.style.display = 'none';
     addFieldBtn.style.display = 'none';
     entryModal.style.display = 'block';
+    focusFirstEnabledInput(entryModal);
+    initFocusTrap(entryModal);
 });
 
 editDetailsBtn.addEventListener('click', () => {
@@ -798,6 +887,7 @@ document.addEventListener('DOMContentLoaded', init);
 if (renameCompanyCancelBtn) {
     renameCompanyCancelBtn.addEventListener('click', () => {
         renameCompanyModal.style.display = 'none';
+        removeFocusTrap(renameCompanyModal);
         pendingRenameCompany = null;
     });
 }
@@ -805,6 +895,7 @@ const renameCloseEl = document.querySelector('.rename-close');
 if (renameCloseEl) {
     renameCloseEl.addEventListener('click', () => {
         renameCompanyModal.style.display = 'none';
+        removeFocusTrap(renameCompanyModal);
         pendingRenameCompany = null;
     });
 }
@@ -818,6 +909,7 @@ if (renameCompanySaveBtn) {
         passwordEntries.forEach(e => { if (e.company === oldName) e.company = newName; });
         if (selectedCompany === oldName) selectedCompany = newName;
         renameCompanyModal.style.display = 'none';
+        removeFocusTrap(renameCompanyModal);
         pendingRenameCompany = null;
         saveData();
         renderCompanies();
@@ -857,11 +949,13 @@ function attemptCloseEntryModal() {
     if (modalMode === 'edit' && isFormDirty()) {
         // show confirm discard modal
         discardModal.style.display = 'block';
+        focusFirstEnabledInput(discardModal);
+        initFocusTrap(discardModal);
         // wire buttons
         const confirmBtn = document.getElementById('confirmDiscardBtn');
         const keepBtn = document.getElementById('keepEditingBtn');
         const closeX = document.querySelector('.discard-close');
-        const hideDiscard = () => { discardModal.style.display = 'none'; };
+        const hideDiscard = () => { discardModal.style.display = 'none'; removeFocusTrap(discardModal); };
         confirmBtn.onclick = () => { hideDiscard(); hideModal(); };
         keepBtn.onclick = hideDiscard;
         closeX.onclick = hideDiscard;
@@ -869,3 +963,43 @@ function attemptCloseEntryModal() {
         hideModal();
     }
 }
+
+// ----- Global keyboard ergonomics -----
+function isVisible(el) { return !!el && el.style && el.style.display !== 'none'; }
+
+document.addEventListener('keydown', (e) => {
+    // Escape closes the topmost open modal
+    if (e.key === 'Escape') {
+        if (isVisible(discardModal)) { discardModal.style.display = 'none'; removeFocusTrap(discardModal); e.preventDefault(); return; }
+        if (isVisible(renameCompanyModal)) { renameCompanyModal.style.display = 'none'; removeFocusTrap(renameCompanyModal); pendingRenameCompany = null; e.preventDefault(); return; }
+        if (isVisible(entryModal)) { attemptCloseEntryModal(); e.preventDefault(); return; }
+    }
+
+    // Enter to save on rename company (not a form)
+    if (e.key === 'Enter' && isVisible(renameCompanyModal)) {
+        if (document.activeElement && renameCompanyModal.contains(document.activeElement)) {
+            e.preventDefault();
+            if (renameCompanySaveBtn) renameCompanySaveBtn.click();
+            return;
+        }
+    }
+
+    // Keyboard Shortcuts
+    const accel = e.metaKey || e.ctrlKey;
+    if (accel && e.key.toLowerCase() === 'n') { // New login
+        if (isVisible(mainApp)) { e.preventDefault(); newItemBtn.click(); }
+    }
+    if (accel && e.key.toLowerCase() === 'e') { // Edit selected
+        if (isVisible(mainApp)) { e.preventDefault(); editDetailsBtn.click(); }
+    }
+    if (accel && e.key.toLowerCase() === 's') { // Save in modal
+        if (isVisible(entryModal)) { e.preventDefault(); saveEntry(); }
+    }
+});
+
+// Helpful titles
+try {
+    const headerNewBtn = document.getElementById('newItemBtn');
+    if (headerNewBtn) headerNewBtn.title = 'New Login (Cmd/Ctrl+N)';
+    if (editDetailsBtn) editDetailsBtn.title = 'Edit (Cmd/Ctrl+E)';
+} catch (_) {}
