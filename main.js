@@ -131,7 +131,20 @@ function createWindow() {
     console.log('App name:', app.getName());
   }
 
-  mainWindow.loadFile('index.html');
+  const useViteDev = process.env.FASTPW2_RENDERER_DEV === '1';
+  const devServerUrl = process.env.FASTPW2_RENDERER_URL || 'http://localhost:5173';
+  if (useViteDev) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Loading renderer from Vite dev server:', devServerUrl);
+    }
+    mainWindow.loadURL(devServerUrl);
+  } else {
+    const prodIndex = path.join(__dirname, 'renderer', 'dist', 'index.html');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Loading renderer from file:', prodIndex);
+    }
+    mainWindow.loadFile(prodIndex);
+  }
 
   mainWindow.once('ready-to-show', () => {
     // Start at compact size; renderer will resize on main app show

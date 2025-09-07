@@ -1,11 +1,14 @@
 {
   "name": "fastpw2",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "A lightweight, local-first password manager. AES-256 encryption. No cloud storage. No telemetry.",
   "main": "main.js",
   "scripts": {
     "start": "FASTPW2_ENABLE_CACHE=1 electron .",
     "dev": "FASTPW2_ENABLE_CACHE=1 electron .",
+    "dev:renderer": "cd renderer && npm run dev",
+    "dev:electron": "FASTPW2_RENDERER_DEV=1 NODE_ENV=development FASTPW2_ENABLE_CACHE=1 electron .",
+    "build:renderer": "cd renderer && npm run build",
     "postinstall": "electron-builder install-app-deps",
     "build": "electron-builder",
     "dist": "electron-builder -mwl",
@@ -80,5 +83,5 @@
     "react-dom": "^19.1.1",
     "tailwind-merge": "^3.3.1"
   },
-  "type": "module"
+  "type": "commonjs"
 }
