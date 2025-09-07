@@ -5,9 +5,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ipc, type PasswordEntry } from '@/lib/ipc';
+import { ipc, type PasswordEntry, type EntryField } from '@/lib/ipc';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Eye, EyeOff, ArrowUp, ArrowDown, Plus, Trash2, Clipboard } from 'lucide-react';
 
 export function MainScreen({
   initialEntries,
@@ -33,7 +35,10 @@ export function MainScreen({
     password: '',
     url: '',
     notes: '',
+    fields: [] as any,
   } as any);
+
+  const [revealedFieldIds, setRevealedFieldIds] = useState<Set<string>>(new Set());
 
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -89,7 +94,8 @@ export function MainScreen({
 
   function openAdd() {
     setEditing(null);
-    setForm({ id: '', company: selectedCompany || '', name: '', username: '', password: '', url: '', notes: '' } as any);
+    setForm({ id: '', company: selectedCompany || '', name: '', username: '', password: '', url: '', notes: '', fields: [] } as any);
+    setRevealedFieldIds(new Set());
     setOpen(true);
   }
 
@@ -103,8 +109,16 @@ export function MainScreen({
       password: e.password || '',
       url: e.url || '',
       notes: e.notes || '',
+      fields: (e.fields || []) as any,
     } as any);
+    setRevealedFieldIds(new Set());
     setOpen(true);
+  }
+
+  function fieldsEqual(a?: EntryField[], b?: EntryField[]): boolean {
+    const aa = (a || []).map((f) => ({ id: f.id, label: f.label, type: f.type, value: f.value }));
+    const bb = (b || []).map((f) => ({ id: f.id, label: f.label, type: f.type, value: f.value }));
+    return JSON.stringify(aa) === JSON.stringify(bb);
   }
 
   function computeDirty(): boolean {
@@ -115,10 +129,11 @@ export function MainScreen({
         (editing.username || '') !== form.username ||
         (editing.password || '') !== form.password ||
         (editing.url || '') !== form.url ||
-        (editing.notes || '') !== form.notes
+        (editing.notes || '') !== form.notes ||
+        !fieldsEqual(editing.fields, (form as any).fields)
       );
     }
-    return !!(form.company || form.name || form.username || form.password || form.url || form.notes);
+    return !!(form.company || form.name || form.username || form.password || form.url || form.notes || ((form as any).fields?.length > 0));
   }
 
   function requestCloseEntryDialog() {
@@ -270,6 +285,30 @@ export function MainScreen({
                   <div className="text-sm"><span className="font-medium">Username:</span> {selectedEntry.username || ''}</div>
                   <div className="text-sm"><span className="font-medium">URL:</span> {selectedEntry.url || ''}</div>
                   <div className="text-sm whitespace-pre-wrap"><span className="font-medium">Notes:</span> {selectedEntry.notes || ''}</div>
+                  {(selectedEntry.fields && selectedEntry.fields.length > 0) && (
+                    <div className="mt-2 grid gap-2">
+                      <div className="font-medium text-sm">Fields</div>
+                      {selectedEntry.fields!.map((f) => (
+                        <div key={f.id} className="flex items-center justify-between gap-2 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium truncate">{f.label || '(No label)'}</div>
+                            <div className="text-muted-foreground truncate">
+                              {f.type === 'password' ? '••••••••' : f.value}
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => copy(f.value, f.label || 'Field')}
+                            title="Copy"
+                          >
+                            <Clipboard className="w-4 h-4" />
+                            Copy
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -308,6 +347,141 @@ export function MainScreen({
             <div className="grid gap-1">
               <Label htmlFor="notes">Notes</Label>
               <Textarea id="notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            </div>
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between">
+                <Label>Custom fields</Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const nf: EntryField = { id: randomId(), label: '', type: 'text', value: '' } as EntryField;
+                    setForm({ ...(form as any), fields: [...(((form as any).fields) || []), nf] } as any);
+                  }}
+                >
+                  <Plus className="w-4 h-4" /> Add field
+                </Button>
+              </div>
+              {(((form as any).fields) || []).length === 0 && (
+                <div className="text-sm text-muted-foreground">No custom fields</div>
+              )}
+              {(((form as any).fields) || []).map((field: EntryField, idx: number) => (
+                <div key={field.id} className="rounded-md border p-2 grid gap-2">
+                  <div className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-4">
+                      <Label className="text-xs">Label</Label>
+                      <Input
+                        value={field.label}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const next = [ ...(((form as any).fields) || []) ] as EntryField[];
+                          next[idx] = { ...field, label: v };
+                          setForm({ ...(form as any), fields: next } as any);
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <Label className="text-xs">Type</Label>
+                      <Select
+                        value={field.type}
+                        onValueChange={(v) => {
+                          const next = [ ...(((form as any).fields) || []) ] as EntryField[];
+                          next[idx] = { ...field, type: v as EntryField['type'] };
+                          setForm({ ...(form as any), fields: next } as any);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="text">Text</SelectItem>
+                          <SelectItem value="password">Password</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-5">
+                      <Label className="text-xs">Value</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type={field.type === 'password' && !(revealedFieldIds as Set<string>).has(field.id) ? 'password' : 'text'}
+                          value={field.value}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            const next = [ ...(((form as any).fields) || []) ] as EntryField[];
+                            next[idx] = { ...field, value: v };
+                            setForm({ ...(form as any), fields: next } as any);
+                          }}
+                        />
+                        {field.type === 'password' && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              const next = new Set(revealedFieldIds);
+                              if (next.has(field.id)) next.delete(field.id); else next.add(field.id);
+                              setRevealedFieldIds(next);
+                            }}
+                            title={(revealedFieldIds as Set<string>).has(field.id) ? 'Hide' : 'Show'}
+                          >
+                            {(revealedFieldIds as Set<string>).has(field.id) ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        disabled={idx === 0}
+                        onClick={() => {
+                          if (idx === 0) return;
+                          const next = [ ...(((form as any).fields) || []) ] as EntryField[];
+                          const [it] = next.splice(idx, 1);
+                          next.splice(idx - 1, 0, it);
+                          setForm({ ...(form as any), fields: next } as any);
+                        }}
+                        title="Move up"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        disabled={idx === ((((form as any).fields) || []).length) - 1}
+                        onClick={() => {
+                          const next = [ ...(((form as any).fields) || []) ] as EntryField[];
+                          const [it] = next.splice(idx, 1);
+                          next.splice(idx + 1, 0, it);
+                          setForm({ ...(form as any), fields: next } as any);
+                        }}
+                        title="Move down"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => {
+                        const next = ((form as any).fields || []).filter((f: EntryField) => f.id !== field.id) as EntryField[];
+                        setForm({ ...(form as any), fields: next } as any);
+                        const nextReveal = new Set(revealedFieldIds);
+                        nextReveal.delete(field.id);
+                        setRevealedFieldIds(nextReveal);
+                      }}
+                      title="Remove"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
           <DialogFooter>
