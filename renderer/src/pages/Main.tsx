@@ -35,6 +35,11 @@ export function MainScreen({
     notes: '',
   } as any);
 
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
+
   useEffect(() => {
     ipc.setWindowSize(980, 680, true);
   }, []);
@@ -102,6 +107,29 @@ export function MainScreen({
     setOpen(true);
   }
 
+  function computeDirty(): boolean {
+    if (editing) {
+      return (
+        (editing.company || '') !== form.company ||
+        (editing.name || '') !== form.name ||
+        (editing.username || '') !== form.username ||
+        (editing.password || '') !== form.password ||
+        (editing.url || '') !== form.url ||
+        (editing.notes || '') !== form.notes
+      );
+    }
+    return !!(form.company || form.name || form.username || form.password || form.url || form.notes);
+  }
+
+  function requestCloseEntryDialog() {
+    if (computeDirty()) {
+      setConfirmDiscardOpen(true);
+    } else {
+      setOpen(false);
+      setEditing(null);
+    }
+  }
+
   function applySave() {
     if (!form.name.trim()) {
       toast({ title: 'Name is required', variant: 'destructive' });
@@ -154,8 +182,20 @@ export function MainScreen({
         {/* Column 1: Companies */}
         <div className="col-span-3">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">Companies</CardTitle>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  disabled={!selectedCompany}
+                  onClick={() => {
+                    setRenameValue(selectedCompany || '');
+                    setRenameOpen(true);
+                  }}
+                >
+                  Rename
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col divide-y">
@@ -237,7 +277,9 @@ export function MainScreen({
         </div>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(v) => {
+        if (!v) { requestCloseEntryDialog(); } else { setOpen(true); }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit entry' : 'New entry'}</DialogTitle>
@@ -269,8 +311,47 @@ export function MainScreen({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={requestCloseEntryDialog}>Cancel</Button>
             <Button onClick={applySave}>{editing ? 'Update' : 'Add'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename company dialog */}
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename company</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor="rename-company">New name</Label>
+            <Input id="rename-company" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameOpen(false)}>Cancel</Button>
+            <Button onClick={() => {
+              const from = selectedCompany || '';
+              const to = (renameValue || '').trim() || 'Unassigned';
+              if (!from) { setRenameOpen(false); return; }
+              setEntries((prev) => prev.map((p) => ({ ...p, company: ((p.company || '').trim() || 'Unassigned') === from ? to : (p.company || '') })));
+              setSelectedCompany(to);
+              setRenameOpen(false);
+              toast({ title: 'Company renamed' });
+            }}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discard changes dialog */}
+      <Dialog open={confirmDiscardOpen} onOpenChange={setConfirmDiscardOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Discard changes?</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-muted-foreground">You have unsaved changes. If you continue, your edits will be lost.</div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDiscardOpen(false)}>Keep editing</Button>
+            <Button variant="destructive" onClick={() => { setConfirmDiscardOpen(false); setOpen(false); setEditing(null); }}>Discard</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
