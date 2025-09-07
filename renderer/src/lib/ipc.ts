@@ -1,3 +1,10 @@
+export type EntryField = {
+  id: string
+  label: string
+  type: 'text' | 'password'
+  value: string
+}
+
 export type PasswordEntry = {
   id: string
   company?: string
@@ -6,6 +13,7 @@ export type PasswordEntry = {
   password?: string
   url?: string
   notes?: string
+  fields?: EntryField[]
   updatedAt?: number
 }
 
