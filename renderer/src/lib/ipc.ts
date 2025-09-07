@@ -1,5 +1,6 @@
 export type PasswordEntry = {
   id: string
+  company?: string
   name: string
   username?: string
   password?: string
