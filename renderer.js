@@ -511,10 +511,13 @@ function getDefaultLabelFromType(type) {
     }
 }
 
-// Add a new field input to the form: [type select][value input][remove]
+// Add a new field input to the form: [label][type select][value input][remove]
 function addFieldInput(value = '', type = 'text') {
     const fieldGroup = document.createElement('div');
     fieldGroup.className = 'field-group';
+
+    const label = document.createElement('label');
+    label.textContent = getDefaultLabelFromType(type);
 
     const valueInput = document.createElement('input');
     valueInput.type = type === 'password' ? 'password' : 'text';
@@ -531,10 +534,11 @@ function addFieldInput(value = '', type = 'text') {
         <option value="username" ${type === 'username' ? 'selected' : ''}>Username</option>
     `;
 
-    // Ensure value input masks when password type is selected
+    // Update label when type changes
     typeSelect.addEventListener('change', () => {
         const t = typeSelect.value;
         valueInput.type = t === 'password' ? 'password' : 'text';
+        label.textContent = getDefaultLabelFromType(t);
     });
 
     const removeBtn = document.createElement('button');
@@ -545,6 +549,7 @@ function addFieldInput(value = '', type = 'text') {
         fieldGroup.remove();
     });
 
+    fieldGroup.appendChild(label);
     fieldGroup.appendChild(typeSelect);
     fieldGroup.appendChild(valueInput);
     fieldGroup.appendChild(removeBtn);
@@ -844,6 +849,7 @@ addCompanyBtn.addEventListener('click', () => {
     if (loginNameGroup) loginNameGroup.style.display = 'none';
     if (fieldsContainer) fieldsContainer.style.display = 'none';
     addFieldBtn.style.display = 'none';
+    deleteLoginBtn.style.display = 'none'; // Ensure delete button is hidden
     entryModal.style.display = 'block';
     focusFirstEnabledInput(entryModal);
     initFocusTrap(entryModal);
