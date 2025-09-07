@@ -6,9 +6,8 @@ A secure, desktop password manager built with Electron that stores your password
 
 - **Secure Storage**: All passwords are encrypted using AES encryption
 - **Master Password**: Single master password protects all your stored credentials
-- **Three-Column Layout**:
+- **Two-Column Layout**:
   - Company: The service/website name
-  - Login: URL for easy access
   - Fields: Custom fields for username, password, keys, etc.
 - **Easy Management**: Add, edit, and delete password entries
 - **Password Visibility**: Click on password fields to reveal/hide them
@@ -38,7 +37,6 @@ A secure, desktop password manager built with Electron that stores your password
 1. Click "Add New Entry" in the main interface
 2. Fill in:
    - **Company**: Name of the service (e.g., "Google", "GitHub")
-   - **Login**: Website URL (optional)
    - **Fields**: Add username, password, API keys, etc.
 3. Click "Save" to store the entry
 

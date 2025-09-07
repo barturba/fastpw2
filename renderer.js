@@ -21,7 +21,6 @@ const saveEntryBtn = document.getElementById('saveEntry');
 const cancelEntryBtn = document.getElementById('cancelEntry');
 const addFieldBtn = document.getElementById('addField');
 const companyInput = document.getElementById('company');
-const loginInput = document.getElementById('login');
 const fieldsContainer = document.getElementById('fieldsContainer');
 
 // Initialize the application
@@ -160,19 +159,6 @@ function renderTable() {
         companyCell.textContent = entry.company;
         row.appendChild(companyCell);
 
-        // Login column
-        const loginCell = document.createElement('td');
-        if (entry.login) {
-            const loginLink = document.createElement('a');
-            loginLink.href = entry.login;
-            loginLink.textContent = entry.login;
-            loginLink.target = '_blank';
-            loginCell.appendChild(loginLink);
-        } else {
-            loginCell.textContent = '-';
-        }
-        row.appendChild(loginCell);
-
         // Fields column
         const fieldsCell = document.createElement('td');
         const fieldsList = document.createElement('div');
@@ -237,7 +223,6 @@ function showModal(isEditing = false, entry = null) {
     if (isEditing && entry) {
         modalTitle.textContent = 'Edit Entry';
         companyInput.value = entry.company;
-        loginInput.value = entry.login || '';
 
         // Clear existing fields
         fieldsContainer.innerHTML = '';
@@ -314,7 +299,6 @@ function addFieldInput(label = '', value = '', type = 'text') {
 // Save entry (add or edit)
 function saveEntry() {
     const company = companyInput.value.trim();
-    const login = loginInput.value.trim();
 
     if (!company) {
         alert('Company name is required');
@@ -345,7 +329,7 @@ function saveEntry() {
         return;
     }
 
-    const entry = { company, login, fields };
+    const entry = { company, fields };
 
     if (editingIndex >= 0) {
         passwordEntries[editingIndex] = entry;
