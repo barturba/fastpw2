@@ -1,9 +1,14 @@
 let passwordEntries = [];
 let editingIndex = -1;
 let masterPassword = null;
+let selectedCompany = null;
+let selectedEntryIndex = null; // index into passwordEntries
 
 // DOM elements
-const passwordTableBody = document.getElementById('passwordTableBody');
+const companyList = document.getElementById('companyList');
+const loginList = document.getElementById('loginList');
+const detailsView = document.getElementById('detailsView');
+const toastEl = document.getElementById('toast');
 const loginScreen = document.getElementById('loginScreen');
 const mainApp = document.getElementById('mainApp');
 const masterPasswordInput = document.getElementById('masterPassword');
@@ -61,7 +66,39 @@ function showLoginScreen() {
 function showMainApp() {
     loginScreen.style.display = 'none';
     mainApp.style.display = 'block';
-    renderTable();
+    renderCompanies();
+}
+
+// Utilities: clipboard + toast
+async function copyToClipboard(text) {
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+        } else {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            document.execCommand('copy');
+            textarea.remove();
+        }
+    } catch (err) {
+        console.error('Copy failed:', err);
+    }
+}
+
+let toastHideTimer = null;
+function showToast(message, durationMs = 1600) {
+    if (!toastEl) return;
+    toastEl.textContent = message;
+    toastEl.classList.add('show');
+    if (toastHideTimer) clearTimeout(toastHideTimer);
+    toastHideTimer = setTimeout(() => {
+        toastEl.classList.remove('show');
+    }, durationMs);
 }
 
 // Load data from storage
@@ -147,74 +184,187 @@ async function promptMasterPasswordSetup() {
     showLoginMessage('Please create a master password to secure your data.', 'success');
 }
 
-// Render the password table
-function renderTable() {
-    passwordTableBody.innerHTML = '';
+// ---------- Three-column rendering ----------
+function getCompanies() {
+    const set = new Set(passwordEntries.map(e => e.company));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
 
-    passwordEntries.forEach((entry, index) => {
-        const row = document.createElement('tr');
+function getLoginsForCompany(company) {
+    return passwordEntries
+        .map((entry, index) => ({ entry, index }))
+        .filter(x => x.entry.company === company);
+}
 
-        // Company column
-        const companyCell = document.createElement('td');
-        companyCell.textContent = entry.company;
-        row.appendChild(companyCell);
+function getEntryTitle(entry) {
+    if (!entry || !Array.isArray(entry.fields)) return 'Login';
+    // Prefer username/email/user fields
+    const preferred = entry.fields.find(f => /^(username|user|email)$/i.test(f.label));
+    if (preferred && preferred.value) return preferred.value;
+    const first = entry.fields[0];
+    return first && first.value ? first.value : 'Login';
+}
 
-        // Fields column
-        const fieldsCell = document.createElement('td');
-        const fieldsList = document.createElement('div');
-        fieldsList.className = 'fields-list';
+function renderCompanies() {
+    companyList.innerHTML = '';
+    loginList.innerHTML = '';
+    detailsView.innerHTML = '';
 
-        entry.fields.forEach(field => {
-            const fieldDiv = document.createElement('div');
-            fieldDiv.className = 'field-item';
+    const companies = getCompanies();
+    if (companies.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.padding = '12px 16px';
+        empty.textContent = 'No entries yet. Use "Add New Entry" to create one.';
+        companyList.appendChild(empty);
+        selectedCompany = null;
+        selectedEntryIndex = null;
+        return;
+    }
 
-            const labelSpan = document.createElement('span');
-            labelSpan.className = 'field-label';
-            labelSpan.textContent = field.label + ': ';
+    // Ensure a selection exists
+    if (!selectedCompany || !companies.includes(selectedCompany)) {
+        selectedCompany = companies[0];
+    }
 
-            const valueSpan = document.createElement('span');
-            valueSpan.className = 'field-value';
-            valueSpan.textContent = field.type === 'password' ? '••••••••' : field.value;
+    companies.forEach(company => {
+        const li = document.createElement('li');
+        li.className = 'list-item' + (company === selectedCompany ? ' active' : '');
+        li.textContent = company;
+        li.addEventListener('click', () => {
+            selectedCompany = company;
+            selectedEntryIndex = null;
+            renderCompanies();
+            renderLogins();
+        });
+        companyList.appendChild(li);
+    });
 
-            // Toggle password visibility
-            if (field.type === 'password') {
-                valueSpan.style.cursor = 'pointer';
-                valueSpan.addEventListener('click', () => {
-                    if (valueSpan.textContent === '••••••••') {
-                        valueSpan.textContent = field.value;
-                    } else {
-                        valueSpan.textContent = '••••••••';
-                    }
-                });
-            }
+    renderLogins();
+}
 
-            fieldDiv.appendChild(labelSpan);
-            fieldDiv.appendChild(valueSpan);
-            fieldsList.appendChild(fieldDiv);
+function renderLogins() {
+    loginList.innerHTML = '';
+    detailsView.innerHTML = '';
+
+    if (!selectedCompany) return;
+    const logins = getLoginsForCompany(selectedCompany);
+    if (logins.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.padding = '12px 16px';
+        empty.textContent = 'No logins for this company yet.';
+        loginList.appendChild(empty);
+        return;
+    }
+
+    // Ensure selection
+    if (
+        selectedEntryIndex === null ||
+        !logins.some(l => l.index === selectedEntryIndex)
+    ) {
+        selectedEntryIndex = logins[0].index;
+    }
+
+    logins.forEach(({ entry, index }) => {
+        const li = document.createElement('li');
+        li.className = 'list-item' + (index === selectedEntryIndex ? ' active' : '');
+        li.textContent = getEntryTitle(entry);
+        li.addEventListener('click', () => {
+            selectedEntryIndex = index;
+            renderLogins();
+            renderDetails();
+        });
+        loginList.appendChild(li);
+    });
+
+    renderDetails();
+}
+
+function renderDetails() {
+    detailsView.innerHTML = '';
+    if (selectedEntryIndex === null) return;
+
+    const entry = passwordEntries[selectedEntryIndex];
+    if (!entry) return;
+
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.marginBottom = '12px';
+
+    const title = document.createElement('div');
+    title.style.fontWeight = '600';
+    title.textContent = `${entry.company} · ${getEntryTitle(entry)}`;
+
+    const actions = document.createElement('div');
+    actions.className = 'action-buttons';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-secondary';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => editEntry(selectedEntryIndex));
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-danger';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', () => deleteEntry(selectedEntryIndex));
+
+    actions.appendChild(editBtn);
+    actions.appendChild(deleteBtn);
+    header.appendChild(title);
+    header.appendChild(actions);
+    detailsView.appendChild(header);
+
+    entry.fields.forEach(field => {
+        const row = document.createElement('div');
+        row.className = 'detail-field' + (field.type === 'password' ? ' is-secret' : '');
+
+        const label = document.createElement('div');
+        label.className = 'field-label';
+        label.textContent = field.label;
+
+        const line = document.createElement('div');
+        line.className = 'detail-row';
+
+        // Left: reveal for passwords
+        const secret = field.type === 'password';
+        let isRevealed = false;
+        const revealBtn = document.createElement('button');
+        revealBtn.className = 'reveal-btn';
+        revealBtn.innerHTML = '<span>▸</span><span>Reveal</span>';
+        if (!secret) { revealBtn.style.display = 'none'; }
+
+        // Value
+        const value = document.createElement('div');
+        value.className = 'field-value';
+        value.textContent = secret ? '••••••••' : field.value;
+        value.style.cursor = 'pointer';
+        value.title = 'Click to copy';
+
+        // Right: copy hint
+        const copyHint = document.createElement('div');
+        copyHint.className = 'copy-hint';
+        copyHint.textContent = 'Copy';
+
+        value.addEventListener('click', async () => {
+            await copyToClipboard(field.value);
+            showToast(`${field.label} copied`);
         });
 
-        fieldsCell.appendChild(fieldsList);
-        row.appendChild(fieldsCell);
+        revealBtn.addEventListener('click', () => {
+            if (!secret) return;
+            isRevealed = !isRevealed;
+            value.textContent = isRevealed ? field.value : '••••••••';
+            revealBtn.innerHTML = isRevealed ? '<span>▾</span><span>Hide</span>' : '<span>▸</span><span>Reveal</span>';
+        });
 
-        // Actions column
-        const actionsCell = document.createElement('td');
-        actionsCell.className = 'action-buttons';
+        line.appendChild(revealBtn);
+        line.appendChild(value);
+        line.appendChild(copyHint);
 
-        const editBtn = document.createElement('button');
-        editBtn.className = 'btn btn-secondary';
-        editBtn.textContent = 'Edit';
-        editBtn.addEventListener('click', () => editEntry(index));
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'btn btn-danger';
-        deleteBtn.textContent = 'Delete';
-        deleteBtn.addEventListener('click', () => deleteEntry(index));
-
-        actionsCell.appendChild(editBtn);
-        actionsCell.appendChild(deleteBtn);
-        row.appendChild(actionsCell);
-
-        passwordTableBody.appendChild(row);
+        row.appendChild(label);
+        row.appendChild(line);
+        detailsView.appendChild(row);
     });
 }
 
@@ -333,12 +483,16 @@ function saveEntry() {
 
     if (editingIndex >= 0) {
         passwordEntries[editingIndex] = entry;
+        selectedCompany = entry.company;
+        selectedEntryIndex = editingIndex;
     } else {
         passwordEntries.push(entry);
+        selectedCompany = entry.company;
+        selectedEntryIndex = passwordEntries.length - 1;
     }
 
     saveData();
-    renderTable();
+    renderCompanies();
     hideModal();
 }
 
@@ -353,7 +507,15 @@ function deleteEntry(index) {
     if (confirm('Are you sure you want to delete this entry?')) {
         passwordEntries.splice(index, 1);
         saveData();
-        renderTable();
+        // Recompute selections
+        if (selectedEntryIndex === index) {
+            selectedEntryIndex = null;
+        }
+        const remainingForCompany = getLoginsForCompany(selectedCompany);
+        if (remainingForCompany.length === 0) {
+            selectedCompany = null;
+        }
+        renderCompanies();
     }
 }
 

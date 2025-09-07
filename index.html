@@ -40,19 +40,21 @@
                 </div>
             </header>
 
-        <div class="table-container">
-            <table id="passwordTable">
-                <thead>
-                    <tr>
-                        <th>Company</th>
-                        <th>Fields</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="passwordTableBody">
-                    <!-- Password entries will be populated here -->
-                </tbody>
-            </table>
+        <div class="three-column">
+            <aside class="pane pane-left">
+                <div class="pane-header">Companies</div>
+                <ul id="companyList" class="list"></ul>
+            </aside>
+
+            <section class="pane pane-middle">
+                <div class="pane-header">Logins</div>
+                <ul id="loginList" class="list"></ul>
+            </section>
+
+            <section class="pane pane-right">
+                <div class="pane-header">Details</div>
+                <div id="detailsView" class="details"></div>
+            </section>
         </div>
 
         <!-- Add/Edit Entry Modal -->
@@ -93,6 +95,7 @@
     </div>
     </div>
 
+    <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
     <script src="renderer.js"></script>
 </body>
 </html>
