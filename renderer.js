@@ -115,13 +115,10 @@ async function init() {
     // Attempt auto-login using secure 14-day cache
     try {
         const cache = await window.electronAPI.cacheGetMaster();
-        if (cache && cache.success && cache.value) {
-            const success = await loadData(cache.value);
-            if (success) {
-                masterPassword = cache.value;
-                showMainApp();
-                return;
-            }
+        if (cache && cache.success && cache.tokenData) {
+            // Cache exists, show verification screen
+            showCacheVerificationScreen();
+            return;
         }
     } catch (e) {
         // Fall through to login screen
@@ -146,6 +143,27 @@ function showLoginScreen() {
 
     // Clear inputs
     masterPasswordInput.value = '';
+
+    loginMessage.textContent = '';
+    loginBtn.textContent = 'Login';
+
+    masterPasswordInput.focus();
+    try { window.electronAPI.setWindowSize(520, 420, true); } catch (_) {}
+}
+
+// Show cache verification screen
+function showCacheVerificationScreen() {
+    if (loadingScreen) loadingScreen.style.display = 'none';
+    loginScreen.style.display = 'flex';
+    if (setupScreen) setupScreen.style.display = 'none';
+    mainApp.style.display = 'none';
+
+    // Clear inputs
+    masterPasswordInput.value = '';
+
+    loginMessage.textContent = 'Please verify your master password to access cached login';
+    loginMessage.style.color = '#007acc';
+    loginBtn.textContent = 'Verify & Login';
 
     masterPasswordInput.focus();
     try { window.electronAPI.setWindowSize(520, 420, true); } catch (_) {}
@@ -743,14 +761,41 @@ async function handleLogin() {
         return;
     }
 
-    const success = await loadData(password);
-    if (success) {
-        masterPassword = password;
-        masterPasswordInput.value = '';
-        showMainApp();
-        showLoginMessage('Login successful!', 'success');
-        // Save in secure cache to enable 14-day no-retype
-        try { await window.electronAPI.cacheSaveMaster(masterPassword); } catch (_) {}
+    // Check if we're in cache verification mode
+    const isCacheVerification = loginBtn.textContent === 'Verify & Login';
+
+    if (isCacheVerification) {
+        // Verify password against cached token
+        try {
+            const result = await window.electronAPI.cacheVerifyMaster(password);
+            if (result && result.success && result.valid) {
+                // Cache verification successful, now load data
+                const success = await loadData(password);
+                if (success) {
+                    masterPassword = password;
+                    masterPasswordInput.value = '';
+                    showMainApp();
+                    showLoginMessage('Login successful!', 'success');
+                } else {
+                    showLoginMessage('Failed to load data', 'error');
+                }
+            } else {
+                showLoginMessage('Incorrect password', 'error');
+            }
+        } catch (error) {
+            showLoginMessage('Cache verification failed', 'error');
+        }
+    } else {
+        // Regular login flow
+        const success = await loadData(password);
+        if (success) {
+            masterPassword = password;
+            masterPasswordInput.value = '';
+            showMainApp();
+            showLoginMessage('Login successful!', 'success');
+            // Save in secure cache to enable 14-day no-retype
+            try { await window.electronAPI.cacheSaveMaster(masterPassword); } catch (_) {}
+        }
     }
 }
 

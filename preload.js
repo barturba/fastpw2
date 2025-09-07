@@ -10,6 +10,7 @@ const api = {
   debugHashFile: () => ipcRenderer.invoke('debug-hash-file'),
   checkFirstRun: () => ipcRenderer.invoke('check-first-run'),
   cacheGetMaster: () => ipcRenderer.invoke('cache-get-master'),
+  cacheVerifyMaster: (password) => ipcRenderer.invoke('cache-verify-master', password),
   cacheSaveMaster: (password) => ipcRenderer.invoke('cache-save-master', password),
   cacheTouchMaster: () => ipcRenderer.invoke('cache-touch-master'),
   cacheClearMaster: () => ipcRenderer.invoke('cache-clear-master'),
