@@ -561,6 +561,16 @@ function addFieldInput(value = '', type = 'text') {
     fieldsContainer.appendChild(fieldGroup);
 }
 
+// Helper function to check for duplicate login names within a company
+function isLoginNameTaken(company, loginName, excludeIndex = -1) {
+    return passwordEntries.some((entry, index) =>
+        index !== excludeIndex &&
+        entry.company === company &&
+        entry.loginName === loginName &&
+        !entry.isCompanyOnly
+    );
+}
+
 // Save entry (add or edit)
 function saveEntry() {
     if (modalMode === 'addCompany') {
@@ -581,6 +591,13 @@ function saveEntry() {
         if (!company) { alert('Select a company first'); return; }
         const loginName = loginNameInput.value.trim();
         if (!loginName) { alert('Login name is required'); return; }
+
+        // Check for duplicate login name
+        if (isLoginNameTaken(company, loginName)) {
+            alert(`A login named "${loginName}" already exists for ${company}. Please choose a different name.`);
+            return;
+        }
+
         const entry = { company, loginName, fields: [] };
         passwordEntries.push(entry);
         selectedCompany = company;
@@ -613,6 +630,13 @@ function saveEntry() {
     });
     const entry = { company, fields };
     if (loginName) entry.loginName = loginName;
+
+    // Check for duplicate login name when editing (exclude current entry)
+    if (loginName && isLoginNameTaken(company, loginName, editingIndex)) {
+        alert(`A login named "${loginName}" already exists for ${company}. Please choose a different name.`);
+        return;
+    }
+
     if (editingIndex >= 0) {
         passwordEntries[editingIndex] = entry;
         selectedCompany = entry.company;

@@ -1,6 +1,6 @@
 {
   "name": "fastpw2",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Lightweight, local-first password manager with AES-256 encryption. All data stays on your device.",
   "main": "main.js",
   "scripts": {
