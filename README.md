@@ -1,6 +1,6 @@
 # FastPW2
 
-Turn your password management simple with FastPW2 - a lightweight, local-first password manager that encrypts everything on your device. No cloud, no telemetry, no compromises. Just secure local storage with AES-256 encryption and optional keychain caching.
+A lightweight, local-first password manager. AES-256 encryption. No cloud storage. No telemetry.
 
 ## Quick start
 ```bash

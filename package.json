@@ -1,7 +1,7 @@
 {
   "name": "fastpw2",
-  "version": "1.4.2",
-  "description": "Lightweight, local-first password manager with AES-256 encryption. All data stays on your device.",
+  "version": "1.4.3",
+  "description": "A lightweight, local-first password manager. AES-256 encryption. No cloud storage. No telemetry.",
   "main": "main.js",
   "scripts": {
     "start": "electron . --cache",
