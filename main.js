@@ -295,6 +295,17 @@ ipcMain.handle('debug-hash-file', async () => {
   }
 });
 
+// Minimal first-run check (safe for production)
+ipcMain.handle('check-first-run', async () => {
+  try {
+    const hashPath = path.join(app.getPath('userData'), 'master.hash');
+    const exists = await fs.access(hashPath).then(() => true).catch(() => false);
+    return { success: true, exists };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // Keychain cache IPC endpoints
 ipcMain.handle('cache-get-master', async () => {
   try {

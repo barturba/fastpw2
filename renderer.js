@@ -128,8 +128,8 @@ async function init() {
     }
     // Determine whether to show setup or login based on presence of master hash
     try {
-        const debugInfo = await window.electronAPI.debugHashFile();
-        if (debugInfo && debugInfo.success && debugInfo.exists === false) {
+        const existsInfo = await window.electronAPI.checkFirstRun();
+        if (existsInfo && existsInfo.success && existsInfo.exists === false) {
             showSetupScreen();
             return;
         }

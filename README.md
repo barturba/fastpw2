@@ -52,5 +52,21 @@ fastpw2/
 - PBKDF2 parameters and salt are stored with the verifier for future derivation
 - Consider increasing iterations over time with a migration flow
 
+### Hardening
+- Renderer runs with `contextIsolation` and without `nodeIntegration`
+- Preload exposes a frozen, minimal API (`window.electronAPI`)
+- External navigation and window opens are denied
+- Strict Content Security Policy applied in `index.html`
+- Secrets are written with file mode `0600`
+
+### Keychain cache opt-in
+By default, the 14‑day master password cache is disabled at runtime. Opt‑in per run by setting:
+
+```bash
+FASTPW2_ENABLE_CACHE=1 npm start
+```
+
+This uses OS keychain via `keytar`. In production runs without the env var, cache endpoints are no‑ops and return null.
+
 ## License
 MIT
