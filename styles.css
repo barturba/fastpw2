@@ -373,6 +373,8 @@ h1 {
     cursor: pointer;
 }
 
+.discard-close { color: #aaa; }
+
 .close:hover {
     color: #333;
 }

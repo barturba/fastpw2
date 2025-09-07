@@ -49,7 +49,7 @@
             </section>
 
             <section class="pane pane-right">
-                <div class="pane-header"><span>Details</span><button id="editDetailsBtn" class="btn btn-secondary" title="Edit details" aria-label="Edit details">Edit</button></div>
+                <div class="pane-header"><span id="detailsHeaderTitle"></span><button id="editDetailsBtn" class="btn btn-secondary" title="Edit details" aria-label="Edit details">Edit</button></div>
                 <div id="detailsView" class="details"></div>
             </section>
         </div>
@@ -92,6 +92,23 @@
                     <button type="button" id="deleteLogin" class="btn btn-danger" style="display: none;">Delete Login</button>
                     <button type="button" id="saveEntry" class="btn btn-primary">Save</button>
                     <button type="button" id="cancelEntry" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Discard Changes Modal -->
+        <div id="discardModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Discard changes?</h2>
+                    <span class="close discard-close">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <p>You have unsaved changes. If you continue, your edits will be lost.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="confirmDiscardBtn" class="btn btn-danger">Discard Changes</button>
+                    <button type="button" id="keepEditingBtn" class="btn btn-secondary">Keep Editing</button>
                 </div>
             </div>
         </div>

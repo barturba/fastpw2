@@ -9,6 +9,7 @@ let companyContextMenuEl = null;
 const companyList = document.getElementById('companyList');
 const loginList = document.getElementById('loginList');
 const detailsView = document.getElementById('detailsView');
+const detailsHeaderTitle = document.getElementById('detailsHeaderTitle');
 const toastEl = document.getElementById('toast');
 const loginScreen = document.getElementById('loginScreen');
 const mainApp = document.getElementById('mainApp');
@@ -22,6 +23,7 @@ const addCompanyBtn = document.getElementById('addCompanyBtn');
 const newItemBtn = document.getElementById('newItemBtn');
 const editDetailsBtn = document.getElementById('editDetailsBtn');
 const entryModal = document.getElementById('entryModal');
+const discardModal = document.getElementById('discardModal');
 const entryForm = document.getElementById('entryForm');
 const modalTitle = document.getElementById('modalTitle');
 const saveEntryBtn = document.getElementById('saveEntry');
@@ -35,6 +37,7 @@ const loginNameGroup = document.getElementById('loginNameGroup');
 const loginNameInput = document.getElementById('loginName');
 let modalMode = null; // 'addCompany' | 'addLogin' | 'edit' | null
 let modalTargetIndex = null; // used for addField/edit
+let formBaseline = null; // snapshot of form values for dirty check
 
 // Initialize the application
 async function init() {
@@ -260,6 +263,7 @@ function renderCompanies() {
 function renderLogins() {
     loginList.innerHTML = '';
     detailsView.innerHTML = '';
+    if (detailsHeaderTitle) detailsHeaderTitle.textContent = selectedCompany ? selectedCompany : '';
 
     if (!selectedCompany) return;
     const logins = getLoginsForCompany(selectedCompany);
@@ -302,18 +306,9 @@ function renderDetails() {
     if (!entry) return;
     if (entry.isCompanyOnly) return;
 
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    header.style.marginBottom = '12px';
-
-    const title = document.createElement('div');
-    title.style.fontWeight = '600';
-    title.textContent = `${entry.company} · ${getEntryTitle(entry)}`;
-
-    header.appendChild(title);
-    detailsView.appendChild(header);
+    if (detailsHeaderTitle) {
+        detailsHeaderTitle.textContent = `${entry.company} · ${getEntryTitle(entry)}`;
+    }
 
     entry.fields.forEach((field, fieldIdx) => {
         const row = document.createElement('div');
@@ -362,33 +357,8 @@ function renderDetails() {
         line.appendChild(value);
         line.appendChild(copyHint);
 
-        // Inline edit/delete for fields via small buttons
-        const fieldActions = document.createElement('div');
-        fieldActions.className = 'action-buttons';
-        const editFieldBtn = document.createElement('button');
-        editFieldBtn.className = 'btn btn-secondary';
-        editFieldBtn.textContent = 'Edit';
-        editFieldBtn.addEventListener('click', () => {
-            editingIndex = selectedEntryIndex;
-            modalMode = 'edit';
-            showModal(true, passwordEntries[editingIndex]);
-            // Focus the field by adding one more empty row to encourage edits
-        });
-        const deleteFieldBtn = document.createElement('button');
-        deleteFieldBtn.className = 'btn btn-danger';
-        deleteFieldBtn.textContent = 'Delete';
-        deleteFieldBtn.addEventListener('click', () => {
-            if (!Array.isArray(passwordEntries[selectedEntryIndex].fields)) return;
-            passwordEntries[selectedEntryIndex].fields.splice(fieldIdx, 1);
-            saveData();
-            renderDetails();
-        });
-        fieldActions.appendChild(editFieldBtn);
-        fieldActions.appendChild(deleteFieldBtn);
-
         row.appendChild(label);
         row.appendChild(line);
-        row.appendChild(fieldActions);
         detailsView.appendChild(row);
     });
 }
@@ -420,6 +390,8 @@ function showModal(isEditing = false, entry = null) {
             deleteEntry(editingIndex);
             hideModal();
         };
+        // snapshot baseline for edit mode
+        formBaseline = captureFormSnapshot();
     } else {
         modalTitle.textContent = 'Add New Entry';
         entryForm.reset();
@@ -435,6 +407,7 @@ function showModal(isEditing = false, entry = null) {
 function hideModal() {
     entryModal.style.display = 'none';
     editingIndex = -1;
+    formBaseline = null;
 }
 
 // Utility to map type to default label
@@ -745,14 +718,13 @@ confirmPasswordInput.addEventListener('keypress', (event) => {
 // addEntry removed
 addFieldBtn.addEventListener('click', () => addFieldInput());
 saveEntryBtn.addEventListener('click', saveEntry);
-cancelEntryBtn.addEventListener('click', hideModal);
+cancelEntryBtn.addEventListener('click', () => attemptCloseEntryModal());
 
 // Close modal when clicking outside or on close button
-document.querySelector('.close').addEventListener('click', hideModal);
+document.querySelector('.close').addEventListener('click', () => attemptCloseEntryModal());
 window.addEventListener('click', (event) => {
-    if (event.target === entryModal) {
-        hideModal();
-    }
+    if (event.target === entryModal) attemptCloseEntryModal();
+    if (event.target === discardModal) discardModal.style.display = 'none';
 });
 
 // Add entity buttons handlers
@@ -800,3 +772,49 @@ editDetailsBtn.addEventListener('click', () => {
 
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', init);
+
+// ----- Dirty check helpers -----
+function captureFormSnapshot() {
+    const snapshot = {
+        company: companyInput.value,
+        loginName: loginNameInput ? loginNameInput.value : '',
+        fields: []
+    };
+    const groups = fieldsContainer.querySelectorAll('.field-group');
+    groups.forEach(g => {
+        const valueInput = g.querySelector('.field-input');
+        const typeSelect = g.querySelector('.field-type-select');
+        snapshot.fields.push({ value: valueInput ? valueInput.value : '', type: typeSelect ? typeSelect.value : 'text' });
+    });
+    return snapshot;
+}
+
+function isFormDirty() {
+    if (!formBaseline) return false;
+    const current = captureFormSnapshot();
+    if (formBaseline.company !== current.company) return true;
+    if (formBaseline.loginName !== current.loginName) return true;
+    if (formBaseline.fields.length !== current.fields.length) return true;
+    for (let i = 0; i < current.fields.length; i++) {
+        if (formBaseline.fields[i].type !== current.fields[i].type) return true;
+        if (formBaseline.fields[i].value !== current.fields[i].value) return true;
+    }
+    return false;
+}
+
+function attemptCloseEntryModal() {
+    if (modalMode === 'edit' && isFormDirty()) {
+        // show confirm discard modal
+        discardModal.style.display = 'block';
+        // wire buttons
+        const confirmBtn = document.getElementById('confirmDiscardBtn');
+        const keepBtn = document.getElementById('keepEditingBtn');
+        const closeX = document.querySelector('.discard-close');
+        const hideDiscard = () => { discardModal.style.display = 'none'; };
+        confirmBtn.onclick = () => { hideDiscard(); hideModal(); };
+        keepBtn.onclick = hideDiscard;
+        closeX.onclick = hideDiscard;
+    } else {
+        hideModal();
+    }
+}
