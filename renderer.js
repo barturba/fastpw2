@@ -13,6 +13,7 @@ const detailsView = document.getElementById('detailsView');
 const detailsHeaderTitle = document.getElementById('detailsHeaderTitle');
 const toastEl = document.getElementById('toast');
 const loginScreen = document.getElementById('loginScreen');
+const loadingScreen = document.getElementById('loadingScreen');
 const setupScreen = document.getElementById('setupScreen');
 const mainApp = document.getElementById('mainApp');
 const masterPasswordInput = document.getElementById('masterPassword');
@@ -138,6 +139,7 @@ async function init() {
 
 // Show login screen
 function showLoginScreen() {
+    if (loadingScreen) loadingScreen.style.display = 'none';
     loginScreen.style.display = 'flex';
     if (setupScreen) setupScreen.style.display = 'none';
     mainApp.style.display = 'none';
@@ -151,6 +153,7 @@ function showLoginScreen() {
 
 // Show main application
 function showMainApp() {
+    if (loadingScreen) loadingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
     if (setupScreen) setupScreen.style.display = 'none';
     mainApp.style.display = 'block';
@@ -160,6 +163,7 @@ function showMainApp() {
 
 // Show setup screen
 function showSetupScreen() {
+    if (loadingScreen) loadingScreen.style.display = 'none';
     if (loginScreen) loginScreen.style.display = 'none';
     if (mainApp) mainApp.style.display = 'none';
     if (setupScreen) setupScreen.style.display = 'flex';

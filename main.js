@@ -59,8 +59,8 @@ async function clearCachedMasterPassword() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 520,
+    height: 420,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -79,6 +79,8 @@ function createWindow() {
   mainWindow.loadFile('index.html');
 
   mainWindow.once('ready-to-show', () => {
+    // Start at compact size; renderer will resize on main app show
+    mainWindow.center();
     mainWindow.show();
   });
 
