@@ -1,4 +1,4 @@
-import { PasswordEntry } from '@/lib/ipc';
+import type { PasswordEntry } from '@/lib/ipc';
 
 interface EntryListProps {
   entries: PasswordEntry[];

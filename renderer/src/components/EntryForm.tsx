@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PasswordEntry, EntryField } from '@/lib/ipc';
+import type { PasswordEntry, EntryField } from '@/lib/ipc';
 import { Eye, EyeOff, ArrowUp, ArrowDown, Plus, Trash2 } from 'lucide-react';
 
 interface EntryFormProps {

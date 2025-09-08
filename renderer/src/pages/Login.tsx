@@ -4,11 +4,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { ipc } from '@/lib/ipc';
+import { ipc, type PasswordEntry } from '@/lib/ipc';
 import { Button as UIButton } from '@/components/ui/button';
 import { Sun, Moon } from 'lucide-react';
 
-export function LoginScreen({ onLoaded }: { onLoaded: (entries: any[], masterPassword: string) => void }) {
+export function LoginScreen({ onLoaded }: { onLoaded: (entries: PasswordEntry[], masterPassword: string) => void }) {
   const { toast } = useToast();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -23,8 +23,10 @@ export function LoginScreen({ onLoaded }: { onLoaded: (entries: any[], masterPas
       const pref = window.localStorage.getItem('themePreference');
       const el = document.documentElement;
       if (pref === 'dark') el.classList.add('dark'); else el.classList.remove('dark');
-    } catch {}
-  }, []);
+    } catch {
+      // Ignore localStorage errors
+    }
+    }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -24,8 +24,10 @@ export function SetupScreen({ onDone }: { onDone: () => void }) {
       const pref = window.localStorage.getItem('themePreference');
       const el = document.documentElement;
       if (pref === 'dark') el.classList.add('dark'); else el.classList.remove('dark');
-    } catch {}
-  }, []);
+    } catch {
+      // Ignore localStorage errors
+    }
+    }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

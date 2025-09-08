@@ -17,7 +17,16 @@ export type PasswordEntry = {
   updatedAt?: number
 }
 
-const api = typeof window !== 'undefined' ? window.electronAPI : ({} as any)
+interface ElectronAPI {
+  checkFirstRun: () => Promise<boolean>
+  setMasterPassword: (password: string) => Promise<{ success: boolean; error?: string }>
+  verifyMasterPassword: (password: string) => Promise<{ success: boolean; error?: string }>
+  loadData: (masterPassword: string) => Promise<{ success: boolean; data?: PasswordEntry[]; error?: string }>
+  saveData: (data: { entries: PasswordEntry[]; masterPassword: string }) => Promise<{ success: boolean; error?: string }>
+  setWindowSize: (width: number, height: number, center?: boolean) => Promise<void>
+}
+
+const api = typeof window !== 'undefined' ? (window as Window & { electronAPI: ElectronAPI }).electronAPI : {} as ElectronAPI
 
 export const ipc = {
   async checkFirstRun() {

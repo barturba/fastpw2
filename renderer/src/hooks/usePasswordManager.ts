@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { PasswordEntry, ipc } from '@/lib/ipc';
+import type { PasswordEntry } from '@/lib/ipc';
+import { ipc } from '@/lib/ipc';
 import { useToast } from '@/hooks/use-toast';
 
 export function usePasswordManager(initialEntries: PasswordEntry[], masterPassword: string) {
@@ -55,7 +56,7 @@ export function usePasswordManager(initialEntries: PasswordEntry[], masterPasswo
     }, 2000);
 
     setAutoSaveTimeout(timeout);
-  }, [autoSaveTimeout]);
+  }, [autoSaveTimeout, handleSave]);
 
   // Save functionality
   const handleSave = useCallback(async () => {
@@ -152,7 +153,7 @@ export function usePasswordManager(initialEntries: PasswordEntry[], masterPasswo
     try {
       await navigator.clipboard.writeText(text);
       toast({ title: `${label} copied` });
-    } catch (e) {
+    } catch {
       toast({ title: 'Copy failed', variant: 'destructive' });
     }
   }, [toast]);

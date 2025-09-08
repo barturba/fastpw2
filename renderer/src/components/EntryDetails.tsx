@@ -1,4 +1,4 @@
-import { PasswordEntry, EntryField } from '@/lib/ipc';
+import type { PasswordEntry, EntryField } from '@/lib/ipc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -17,7 +17,6 @@ interface EntryDetailsProps {
   onEntryDelete: (entryId: string) => void;
   onEntryDuplicate: (entry: PasswordEntry) => void;
   onInlineEdit: (field: string, currentValue: string) => void;
-  onInlineSave: (field: string, value: string) => void;
   onCustomFieldAdd: () => void;
   onCustomFieldUpdate: (index: number, field: Partial<EntryField>) => void;
   onCustomFieldMove: (index: number, direction: 'up' | 'down') => void;
@@ -34,7 +33,6 @@ export function EntryDetails({
   onEntryDelete,
   onEntryDuplicate,
   onInlineEdit,
-  onInlineSave,
   onCustomFieldAdd,
   onCustomFieldUpdate,
   onCustomFieldMove,
