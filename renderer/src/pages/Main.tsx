@@ -20,6 +20,10 @@ export function MainScreen({
 }) {
   const { toast } = useToast();
   const [entries, setEntries] = useState<PasswordEntry[]>(initialEntries || []);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const local = (typeof window !== 'undefined' && window.localStorage.getItem('themePreference')) as 'light' | 'dark' | null;
+    return local || 'light';
+  });
   const [q, setQ] = useState('');
 
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
@@ -50,6 +54,26 @@ export function MainScreen({
   }, []);
 
   useEffect(() => {
+    // Apply theme on mount and whenever it changes
+    const el = document.documentElement;
+    if (theme === 'dark') el.classList.add('dark'); else el.classList.remove('dark');
+  }, [theme]);
+
+  useEffect(() => {
+    // Load theme from settings entry in initial entries
+    const settings = (initialEntries || []).find((e) => e.id === '__settings__');
+    if (settings?.notes) {
+      try {
+        const json = JSON.parse(settings.notes as string) as { theme?: 'light' | 'dark' };
+        if (json?.theme === 'dark' || json?.theme === 'light') {
+          setTheme(json.theme);
+          window.localStorage.setItem('themePreference', json.theme);
+        }
+      } catch {}
+    }
+  }, [initialEntries]);
+
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const isMod = e.metaKey || e.ctrlKey;
       if (isMod && (e.key === 'n' || e.key === 'N')) {
@@ -70,6 +94,7 @@ export function MainScreen({
   const companies = useMemo(() => {
     const set = new Set<string>();
     for (const e of entries) {
+      if (e.id === '__settings__') continue;
       set.add((e.company || '').trim() || 'Unassigned');
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
@@ -78,6 +103,7 @@ export function MainScreen({
   const filteredLogins = useMemo(() => {
     const query = q.trim().toLowerCase();
     return entries.filter((e) => {
+      if (e.id === '__settings__') return false;
       const matchesCompany = !selectedCompany || ((e.company || '').trim() || 'Unassigned') === selectedCompany;
       const matchesQuery = !query || [e.name, e.username, e.url, e.notes]
         .filter(Boolean)
@@ -86,7 +112,7 @@ export function MainScreen({
     });
   }, [entries, q, selectedCompany]);
 
-  const selectedEntry = useMemo(() => entries.find((e) => e.id === selectedEntryId) || null, [entries, selectedEntryId]);
+  const selectedEntry = useMemo(() => entries.find((e) => e.id === selectedEntryId && e.id !== '__settings__') || null, [entries, selectedEntryId]);
 
   function randomId() {
     try { return crypto.randomUUID(); } catch { return String(Date.now()) + Math.random().toString(16).slice(2); }
@@ -162,12 +188,18 @@ export function MainScreen({
   }
 
   async function handleSave() {
-    const res = await ipc.saveData(entries, masterPassword);
+    // Inject settings entry with theme
+    const withoutSettings = entries.filter((e) => e.id !== '__settings__');
+    const settingsEntry: PasswordEntry = { id: '__settings__', name: '__settings__', notes: JSON.stringify({ theme }) } as PasswordEntry;
+    const payload = [settingsEntry, ...withoutSettings];
+
+    const res = await ipc.saveData(payload, masterPassword);
     if (!res?.success) {
       toast({ title: 'Save failed', description: res?.error || 'Unknown error', variant: 'destructive' });
       return;
     }
     toast({ title: 'Saved' });
+    setEntries(payload);
   }
 
   async function copy(text?: string, label?: string) {
@@ -196,10 +228,12 @@ export function MainScreen({
             onClick={() => {
               const el = document.documentElement;
               if (el.classList.contains('dark')) {
-                el.classList.remove('dark');
+                setTheme('light');
+                window.localStorage.setItem('themePreference', 'light');
                 toast({ title: 'Light theme' });
               } else {
-                el.classList.add('dark');
+                setTheme('dark');
+                window.localStorage.setItem('themePreference', 'dark');
                 toast({ title: 'Dark theme' });
               }
             }}
