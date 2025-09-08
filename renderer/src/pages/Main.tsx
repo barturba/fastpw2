@@ -9,7 +9,7 @@ import { ipc, type PasswordEntry, type EntryField } from '@/lib/ipc';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Eye, EyeOff, ArrowUp, ArrowDown, Plus, Trash2, Clipboard } from 'lucide-react';
+import { Eye, EyeOff, ArrowUp, ArrowDown, Plus, Trash2, Clipboard, Sun, Moon } from 'lucide-react';
 
 export function MainScreen({
   initialEntries,
@@ -189,8 +189,28 @@ export function MainScreen({
     <div className="p-3 space-y-3">
       <div className="flex items-center gap-2">
         <Input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
-        <Button onClick={openAdd}>New</Button>
-        <Button onClick={handleSave}>Save</Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              const el = document.documentElement;
+              if (el.classList.contains('dark')) {
+                el.classList.remove('dark');
+                toast({ title: 'Light theme' });
+              } else {
+                el.classList.add('dark');
+                toast({ title: 'Dark theme' });
+              }
+            }}
+            title="Toggle theme"
+          >
+            <Sun className="h-4 w-4 hidden dark:block" />
+            <Moon className="h-4 w-4 dark:hidden" />
+          </Button>
+          <Button onClick={openAdd}>New</Button>
+          <Button onClick={handleSave}>Save</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-12 gap-3">
@@ -282,7 +302,20 @@ export function MainScreen({
               {selectedEntry && (
                 <div className="grid gap-2">
                   <div className="text-sm"><span className="font-medium">Company:</span> {selectedEntry.company || 'Unassigned'}</div>
-                  <div className="text-sm"><span className="font-medium">Username:</span> {selectedEntry.username || ''}</div>
+                  <button
+                    className="text-left text-sm hover:bg-accent rounded px-1"
+                    onClick={() => copy(selectedEntry.username, 'Username')}
+                    title="Click to copy username"
+                  >
+                    <span className="font-medium">Username:</span> {selectedEntry.username || ''}
+                  </button>
+                  <button
+                    className="text-left text-sm hover:bg-accent rounded px-1"
+                    onClick={() => copy(selectedEntry.password, 'Password')}
+                    title="Click to copy password"
+                  >
+                    <span className="font-medium">Password:</span> {selectedEntry.password ? '••••••••' : ''}
+                  </button>
                   <div className="text-sm"><span className="font-medium">URL:</span> {selectedEntry.url || ''}</div>
                   <div className="text-sm whitespace-pre-wrap"><span className="font-medium">Notes:</span> {selectedEntry.notes || ''}</div>
                   {(selectedEntry.fields && selectedEntry.fields.length > 0) && (
