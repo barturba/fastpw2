@@ -1,6 +1,6 @@
 {
   "name": "fastpw2",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "A lightweight, local-first password manager. AES-256 encryption. No cloud storage. No telemetry.",
   "main": "main.js",
   "scripts": {
@@ -63,28 +63,12 @@
     }
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.7.0",
-    "autoprefixer": "^10.4.21",
-    "concurrently": "^9.2.1",
-    "electron": "^25.0.0",
-    "electron-builder": "^24.9.1",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.13",
-    "vite": "^6.3.5",
+    "electron": "^33.0.0",
+    "electron-builder": "^26.0.0",
     "wait-on": "^8.0.4"
   },
   "dependencies": {
-    "@radix-ui/react-dialog": "^1.1.15",
-    "@radix-ui/react-label": "^2.1.7",
-    "@radix-ui/react-slot": "^1.2.3",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "crypto-js": "^4.1.1",
-    "keytar": "^7.9.0",
-    "lucide-react": "^0.542.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "tailwind-merge": "^3.3.1"
+    "keytar": "^7.9.0"
   },
   "type": "commonjs"
 }

@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ipc, type PasswordEntry, type EntryField } from '@/lib/ipc';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ipc, type PasswordEntry } from '@/lib/ipc';
 import { useToast } from '@/hooks/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Eye, EyeOff, ArrowUp, ArrowDown, Plus, Trash2, Clipboard, Sun, Moon } from 'lucide-react';
+import { Sun, Moon, X } from 'lucide-react';
+
+// Import our new components and hooks
+import { EntryList } from '@/components/EntryList';
+import { CompanyList } from '@/components/CompanyList';
+import { EntryDetails } from '@/components/EntryDetails';
+import { EntryForm } from '@/components/EntryForm';
+import { usePasswordManager } from '@/hooks/usePasswordManager';
 
 export function MainScreen({
   initialEntries,
@@ -19,208 +22,166 @@ export function MainScreen({
   masterPassword: string;
 }) {
   const { toast } = useToast();
-  const [entries, setEntries] = useState<PasswordEntry[]>(initialEntries || []);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const local = (typeof window !== 'undefined' && window.localStorage.getItem('themePreference')) as 'light' | 'dark' | null;
     return local || 'light';
   });
-  const [q, setQ] = useState('');
 
-  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
-  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  // Form dialog state
+  const [showForm, setShowForm] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<PasswordEntry | null>(null);
 
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<PasswordEntry | null>(null);
-  const [form, setForm] = useState<Required<Omit<PasswordEntry, 'updatedAt'>>>({
-    id: '',
-    company: '',
-    name: '',
-    username: '',
-    password: '',
-    url: '',
-    notes: '',
-    fields: [] as any,
-  } as any);
-
-  const [revealedFieldIds, setRevealedFieldIds] = useState<Set<string>>(new Set());
-
-  const [renameOpen, setRenameOpen] = useState(false);
+  // Rename company dialog state
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [renameValue, setRenameValue] = useState('');
 
-  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
+  // Use our custom hook for state management
+  const {
+    entries,
+    selectedCompany,
+    selectedEntryId,
+    selectedEntry,
+    searchQuery,
+    searchSelectedIndex,
+    hasUnsavedChanges,
+    companies,
+    filteredEntries,
+    setSelectedCompany,
+    setSelectedEntryId,
+    setSearchSelectedIndex,
+    handleSearchChange,
+    handleSave,
+    addEntry,
+    updateEntry,
+    deleteEntry,
+    duplicateEntry,
+    copyToClipboard,
+    triggerAutoSave
+  } = usePasswordManager(initialEntries, masterPassword);
 
-  useEffect(() => {
-    ipc.setWindowSize(980, 680, true);
-  }, []);
+  function InlineField({
+    field,
+    value,
+    placeholder,
+    type = 'text',
+    multiline = false,
+    showEditButton = true
+  }: {
+    field: string;
+    value: string;
+    placeholder?: string;
+    type?: string;
+    multiline?: boolean;
+    showEditButton?: boolean;
+  }) {
+    const isEditing = editingField === field;
 
-  useEffect(() => {
-    // Apply theme on mount and whenever it changes
-    const el = document.documentElement;
-    if (theme === 'dark') el.classList.add('dark'); else el.classList.remove('dark');
-  }, [theme]);
-
-  useEffect(() => {
-    // Load theme from settings entry in initial entries
-    const settings = (initialEntries || []).find((e) => e.id === '__settings__');
-    if (settings?.notes) {
-      try {
-        const json = JSON.parse(settings.notes as string) as { theme?: 'light' | 'dark' };
-        if (json?.theme === 'dark' || json?.theme === 'light') {
-          setTheme(json.theme);
-          window.localStorage.setItem('themePreference', json.theme);
-        }
-      } catch {}
-    }
-  }, [initialEntries]);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const isMod = e.metaKey || e.ctrlKey;
-      if (isMod && (e.key === 'n' || e.key === 'N')) {
-        e.preventDefault();
-        openAdd();
-      } else if (isMod && (e.key === 's' || e.key === 'S')) {
-        e.preventDefault();
-        handleSave();
-      } else if (e.key === 'Escape' && open) {
-        e.preventDefault();
-        setOpen(false);
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, entries, masterPassword]);
-
-  const companies = useMemo(() => {
-    const set = new Set<string>();
-    for (const e of entries) {
-      if (e.id === '__settings__') continue;
-      set.add((e.company || '').trim() || 'Unassigned');
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [entries]);
-
-  const filteredLogins = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    return entries.filter((e) => {
-      if (e.id === '__settings__') return false;
-      const matchesCompany = !selectedCompany || ((e.company || '').trim() || 'Unassigned') === selectedCompany;
-      const matchesQuery = !query || [e.name, e.username, e.url, e.notes]
-        .filter(Boolean)
-        .some((v) => (v as string).toLowerCase().includes(query));
-      return matchesCompany && matchesQuery;
-    });
-  }, [entries, q, selectedCompany]);
-
-  const selectedEntry = useMemo(() => entries.find((e) => e.id === selectedEntryId && e.id !== '__settings__') || null, [entries, selectedEntryId]);
-
-  function randomId() {
-    try { return crypto.randomUUID(); } catch { return String(Date.now()) + Math.random().toString(16).slice(2); }
-  }
-
-  function openAdd() {
-    setEditing(null);
-    setForm({ id: '', company: selectedCompany || '', name: '', username: '', password: '', url: '', notes: '', fields: [] } as any);
-    setRevealedFieldIds(new Set());
-    setOpen(true);
-  }
-
-  function openEdit(e: PasswordEntry) {
-    setEditing(e);
-    setForm({
-      id: e.id,
-      company: e.company || '',
-      name: e.name || '',
-      username: e.username || '',
-      password: e.password || '',
-      url: e.url || '',
-      notes: e.notes || '',
-      fields: (e.fields || []) as any,
-    } as any);
-    setRevealedFieldIds(new Set());
-    setOpen(true);
-  }
-
-  function fieldsEqual(a?: EntryField[], b?: EntryField[]): boolean {
-    const aa = (a || []).map((f) => ({ id: f.id, label: f.label, type: f.type, value: f.value }));
-    const bb = (b || []).map((f) => ({ id: f.id, label: f.label, type: f.type, value: f.value }));
-    return JSON.stringify(aa) === JSON.stringify(bb);
-  }
-
-  function computeDirty(): boolean {
-    if (editing) {
-      return (
-        (editing.company || '') !== form.company ||
-        (editing.name || '') !== form.name ||
-        (editing.username || '') !== form.username ||
-        (editing.password || '') !== form.password ||
-        (editing.url || '') !== form.url ||
-        (editing.notes || '') !== form.notes ||
-        !fieldsEqual(editing.fields, (form as any).fields)
+    if (isEditing) {
+  return (
+        <div className="flex items-center gap-2 flex-1">
+          {multiline ? (
+            <Textarea
+              value={editingValue}
+              onChange={(e) => setEditingValue(e.target.value)}
+              placeholder={placeholder}
+              className="min-h-[80px] text-sm"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  saveInlineEdit();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  cancelInlineEdit();
+                }
+              }}
+            />
+          ) : (
+            <Input
+              type={type}
+              value={editingValue}
+              onChange={(e) => setEditingValue(e.target.value)}
+              placeholder={placeholder}
+              className="text-sm"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  saveInlineEdit();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  cancelInlineEdit();
+                }
+              }}
+            />
+          )}
+          <Button size="sm" onClick={saveInlineEdit} title="Save (Enter)">
+            <Check className="w-4 h-4" />
+          </Button>
+          <Button size="sm" variant="outline" onClick={cancelInlineEdit} title="Cancel (Esc)">
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
       );
     }
-    return !!(form.company || form.name || form.username || form.password || form.url || form.notes || ((form as any).fields?.length > 0));
-  }
 
-  function requestCloseEntryDialog() {
-    if (computeDirty()) {
-      setConfirmDiscardOpen(true);
-    } else {
-      setOpen(false);
-      setEditing(null);
-    }
-  }
+    const displayValue = field === 'password' && !isEditing ? '••••••••' : value;
 
-  function applySave() {
-    if (!form.name.trim()) {
-      toast({ title: 'Name is required', variant: 'destructive' });
-      return;
-    }
-    if (editing) {
-      setEntries((prev) => prev.map((p) => (p.id === editing.id ? { ...p, ...form, updatedAt: Date.now() } : p)));
-    } else {
-      const id = randomId();
-      setEntries((prev) => [{ ...form, id, updatedAt: Date.now() }, ...prev]);
-    }
-    if (!selectedCompany) setSelectedCompany((form.company || '').trim() || 'Unassigned');
-    setOpen(false);
-    setEditing(null);
-  }
-
-  async function handleSave() {
-    // Inject settings entry with theme
-    const withoutSettings = entries.filter((e) => e.id !== '__settings__');
-    const settingsEntry: PasswordEntry = { id: '__settings__', name: '__settings__', notes: JSON.stringify({ theme }) } as PasswordEntry;
-    const payload = [settingsEntry, ...withoutSettings];
-
-    const res = await ipc.saveData(payload, masterPassword);
-    if (!res?.success) {
-      toast({ title: 'Save failed', description: res?.error || 'Unknown error', variant: 'destructive' });
-      return;
-    }
-    toast({ title: 'Saved' });
-    setEntries(payload);
-  }
-
-  async function copy(text?: string, label?: string) {
-    try {
-      await navigator.clipboard.writeText(text || '');
-      toast({ title: `${label || 'Value'} copied` });
-    } catch (e) {
-      toast({ title: 'Copy failed', variant: 'destructive' });
-    }
-  }
-
-  function remove(id: string) {
-    setEntries((prev) => prev.filter((p) => p.id !== id));
-    if (selectedEntryId === id) setSelectedEntryId(null);
-    toast({ title: 'Deleted' });
+    return (
+      <div className="group flex items-center gap-2 flex-1">
+        <span className="flex-1">
+          {displayValue || (placeholder ? <span className="text-muted-foreground italic">{placeholder}</span> : '')}
+        </span>
+        {showEditButton && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={() => startInlineEdit(field, value)}
+            title="Edit inline"
+          >
+            <Edit2 className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+    );
   }
 
   return (
-    <div className="p-3 space-y-3">
-      <div className="flex items-center gap-2">
-        <Input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
+    <div className="p-3 space-y-3" role="application" aria-label="Password Manager">
+      <header className="flex items-center gap-2" role="toolbar" aria-label="Main toolbar">
+        {hasUnsavedChanges && (
+          <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
+            <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+            <span>Auto-saving...</span>
+          </div>
+        )}
+        <div className="relative flex-1">
+          <Input
+            id="search-input"
+            placeholder="Search passwords (⌘K)"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="pr-8"
+            aria-label="Search passwords"
+            aria-describedby="search-help"
+          />
+          <div id="search-help" className="sr-only">
+            Press Cmd+K to focus search, use arrow keys to navigate results, Enter to select
+          </div>
+          {q && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-accent"
+              onClick={() => setQ('')}
+              title="Clear search"
+              aria-label="Clear search"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
         <div className="ml-auto flex items-center gap-2">
           <Button
             variant="outline"
@@ -237,22 +198,32 @@ export function MainScreen({
                 toast({ title: 'Dark theme' });
               }
             }}
-            title="Toggle theme"
+            title="Toggle theme (Shift+Click for quick toggle)"
           >
             <Sun className="h-4 w-4 hidden dark:block" />
             <Moon className="h-4 w-4 dark:hidden" />
           </Button>
-          <Button onClick={openAdd}>New</Button>
-          <Button onClick={handleSave}>Save</Button>
+          <Button onClick={openAdd} title="Create new entry (⌘N)">
+            <Plus className="w-4 h-4 mr-2" />
+            New
+          </Button>
+          <Button
+            onClick={handleSave}
+            variant={hasUnsavedChanges ? "default" : "outline"}
+            className={hasUnsavedChanges ? "animate-pulse" : ""}
+            title={hasUnsavedChanges ? "Save changes (⌘S)" : "No changes to save"}
+          >
+            {hasUnsavedChanges ? "Save*" : "Save"}
+          </Button>
         </div>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-12 gap-3">
+      <main className="grid grid-cols-12 gap-3">
         {/* Column 1: Companies */}
-        <div className="col-span-3">
+        <section className="col-span-3" aria-labelledby="companies-heading">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">Companies</CardTitle>
+              <CardTitle id="companies-heading" className="text-base">Companies</CardTitle>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -271,124 +242,415 @@ export function MainScreen({
                 {companies.map((c) => (
                   <button
                     key={c}
-                    className={`text-left py-2 ${selectedCompany === c ? 'font-semibold' : ''}`}
+                    className={`text-left py-2 px-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                      selectedCompany === c ? 'font-semibold bg-accent' : 'hover:bg-accent/50'
+                    }`}
                     onClick={() => { setSelectedCompany(c); setSelectedEntryId(null); }}
+                    aria-selected={selectedCompany === c}
+                    role="option"
                   >
                     {c}
                   </button>
                 ))}
                 {companies.length === 0 && (
-                  <div className="text-sm text-muted-foreground">No companies</div>
+                  <div className="text-sm text-muted-foreground text-center py-8">
+                    <div className="text-lg mb-2">🏢</div>
+                    <div>No companies yet</div>
+                    <div className="text-xs mt-1">Create your first entry to get started</div>
+                  </div>
                 )}
               </div>
             </CardContent>
           </Card>
-        </div>
+        </section>
 
         {/* Column 2: Logins for selected company */}
-        <div className="col-span-4">
+        <section className="col-span-4" aria-labelledby="logins-heading">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Logins</CardTitle>
+              <CardTitle id="logins-heading" className="text-base">
+                Logins {selectedCompany && `for ${selectedCompany}`}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col divide-y">
-                {filteredLogins.map((e, idx) => (
+              <div className="flex flex-col divide-y" role="listbox">
+                {filteredLogins.map((e, idx) => {
+                  const isSelected = selectedEntryId === e.id;
+                  const isSearchSelected = q.trim() && idx === searchSelectedIndex;
+                  return (
                   <button
                     key={e.id || `${e.name || 'item'}-${idx}`}
-                    className={`text-left py-2 ${selectedEntryId === e.id ? 'font-semibold' : ''}`}
-                    onClick={() => setSelectedEntryId(e.id)}
+                      className={`text-left py-2 px-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                        isSelected || isSearchSelected ? 'font-semibold bg-accent' : 'hover:bg-accent/50'
+                      }`}
+                      onClick={() => {
+                        setSelectedEntryId(e.id);
+                        if (q.trim()) setSearchSelectedIndex(idx);
+                      }}
+                      aria-selected={isSelected}
+                      role="option"
                   >
                     {e.name}
                   </button>
-                ))}
+                  );
+                })}
                 {filteredLogins.length === 0 && (
-                  <div className="text-sm text-muted-foreground">No logins</div>
+                  <div className="text-sm text-muted-foreground text-center py-8">
+                    {q.trim() ? (
+                      <>
+                        <div className="text-lg mb-2">🔍</div>
+                        <div>No results found</div>
+                        <div className="text-xs mt-1">Try a different search term</div>
+                      </>
+                    ) : selectedCompany ? (
+                      <>
+                        <div className="text-lg mb-2">🔐</div>
+                        <div>No logins for {selectedCompany}</div>
+                        <div className="text-xs mt-1">Create a new entry to get started</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-lg mb-2">📝</div>
+                        <div>No logins yet</div>
+                        <div className="text-xs mt-1">Select a company or create your first entry</div>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             </CardContent>
           </Card>
-        </div>
+        </section>
 
         {/* Column 3: Fields for selected login */}
-        <div className="col-span-5">
+        <aside className="col-span-5" aria-labelledby="details-heading">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">{selectedEntry?.name || 'Details'}</CardTitle>
+              <CardTitle id="details-heading" className="text-base">
+                {selectedEntry?.name || 'Entry Details'}
+              </CardTitle>
               {selectedEntry && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline">Actions</Button>
+                    <Button variant="outline" title="Entry actions (⌘E to edit, ⌘D to delete)">
+                      Actions
+                    </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => copy(selectedEntry.username, 'Username')}>Copy username</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => copy(selectedEntry.password, 'Password')}>Copy password</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => openEdit(selectedEntry)}>Edit</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => remove(selectedEntry.id)}>Delete</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => copy(selectedEntry.username, 'Username', `username-${selectedEntry.id}`)}>
+                      <Clipboard className="w-4 h-4 mr-2" />
+                      Copy username
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => copy(selectedEntry.password, 'Password', `password-${selectedEntry.id}`)}>
+                      <Clipboard className="w-4 h-4 mr-2" />
+                      Copy password
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => copy(selectedEntry.url || '', 'URL', `url-${selectedEntry.id}`)}>
+                      <Clipboard className="w-4 h-4 mr-2" />
+                      Copy URL
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => duplicateEntry(selectedEntry)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Duplicate entry (⌘⇧D)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openEdit(selectedEntry)}>
+                      <Edit2 className="w-4 h-4 mr-2" />
+                      Edit (⌘E)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => remove(selectedEntry.id)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete (⌘D)
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
             </CardHeader>
             <CardContent>
               {!selectedEntry && (
-                <div className="text-sm text-muted-foreground">Select a login to view its fields</div>
+                <div className="text-sm text-muted-foreground text-center py-12">
+                  <div className="text-2xl mb-3">👆</div>
+                  <div className="font-medium mb-1">Select a login to view details</div>
+                  <div className="text-xs">Use arrow keys to navigate, Enter to select</div>
+                </div>
               )}
               {selectedEntry && (
                 <div className="grid gap-2">
-                  <div className="text-sm"><span className="font-medium">Company:</span> {selectedEntry.company || 'Unassigned'}</div>
+                  <div className="text-sm">
+                    <span className="font-medium">Company:</span>{' '}
+                    <InlineField
+                      field="company"
+                      value={selectedEntry.company || ''}
+                      placeholder="Unassigned"
+                    />
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-medium">Name:</span>{' '}
+                    <InlineField
+                      field="name"
+                      value={selectedEntry.name || ''}
+                      placeholder="Entry name"
+                    />
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-medium">Username:</span>{' '}
+                    <div className="flex items-center gap-2">
                   <button
-                    className="text-left text-sm hover:bg-accent rounded px-1"
-                    onClick={() => copy(selectedEntry.username, 'Username')}
-                    title="Click to copy username"
-                  >
-                    <span className="font-medium">Username:</span> {selectedEntry.username || ''}
+                        className={`flex-1 text-left rounded px-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                          copiedFieldIds.has(`username-${selectedEntry.id}`)
+                            ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                            : 'hover:bg-accent'
+                        }`}
+                        onClick={() => copy(selectedEntry.username, 'Username', `username-${selectedEntry.id}`)}
+                        title="Click to copy username (Space)"
+                        tabIndex={0}
+                      >
+                        <InlineField
+                          field="username"
+                          value={selectedEntry.username || ''}
+                          placeholder="Username"
+                          showEditButton={false}
+                        />
+                        {copiedFieldIds.has(`username-${selectedEntry.id}`) && (
+                          <span className="ml-2 text-xs opacity-70">✓</span>
+                        )}
                   </button>
+                    </div>
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-medium">Password:</span>{' '}
+                    <div className="flex items-center gap-2">
                   <button
-                    className="text-left text-sm hover:bg-accent rounded px-1"
-                    onClick={() => copy(selectedEntry.password, 'Password')}
-                    title="Click to copy password"
-                  >
-                    <span className="font-medium">Password:</span> {selectedEntry.password ? '••••••••' : ''}
+                        className={`flex-1 text-left rounded px-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                          copiedFieldIds.has(`password-${selectedEntry.id}`)
+                            ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                            : 'hover:bg-accent'
+                        }`}
+                        onClick={() => copy(selectedEntry.password, 'Password', `password-${selectedEntry.id}`)}
+                        title="Click to copy password (Space)"
+                        tabIndex={0}
+                      >
+                        <InlineField
+                          field="password"
+                          value={selectedEntry.password || ''}
+                          placeholder="Password"
+                          type="password"
+                          showEditButton={false}
+                        />
+                        {copiedFieldIds.has(`password-${selectedEntry.id}`) && (
+                          <span className="ml-2 text-xs opacity-70">✓</span>
+                        )}
                   </button>
-                  <div className="text-sm"><span className="font-medium">URL:</span> {selectedEntry.url || ''}</div>
-                  <div className="text-sm whitespace-pre-wrap"><span className="font-medium">Notes:</span> {selectedEntry.notes || ''}</div>
-                  {(selectedEntry.fields && selectedEntry.fields.length > 0) && (
-                    <div className="mt-2 grid gap-2">
-                      <div className="font-medium text-sm">Fields</div>
-                      {selectedEntry.fields!.map((f) => (
-                        <div key={f.id} className="flex items-center justify-between gap-2 text-sm">
-                          <div className="min-w-0 flex-1">
-                            <div className="font-medium truncate">{f.label || '(No label)'}</div>
-                            <div className="text-muted-foreground truncate">
-                              {f.type === 'password' ? '••••••••' : f.value}
                             </div>
                           </div>
+                  <div className="text-sm">
+                    <span className="font-medium">URL:</span>{' '}
+                    <InlineField
+                      field="url"
+                      value={selectedEntry.url || ''}
+                      placeholder="https://example.com"
+                    />
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-medium">Notes:</span>
+                    <div className="mt-1">
+                      <InlineField
+                        field="notes"
+                        value={selectedEntry.notes || ''}
+                        placeholder="Additional notes..."
+                        multiline
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-2">
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium text-sm">Custom Fields</div>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => copy(f.value, f.label || 'Field')}
+                        onClick={() => {
+                          const nf: EntryField = { id: randomId(), label: '', type: 'text', value: '' };
+                          const next = [...(selectedEntry.fields || []), nf];
+                          const updatedEntry = { ...selectedEntry, fields: next };
+                          setEntries(prev => prev.map(e => e.id === selectedEntry.id ? { ...updatedEntry, updatedAt: Date.now() } : e));
+                          triggerAutoSave();
+                        }}
+                        className="gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add field
+                      </Button>
+                    </div>
+                    {(selectedEntry.fields && selectedEntry.fields.length > 0) && (
+                      selectedEntry.fields!.map((f, idx) => (
+                        <div key={f.id} className="rounded-md border p-3 grid gap-2">
+                          <div className="grid grid-cols-12 gap-2 items-center">
+                            <div className="col-span-4">
+                              <Label className="text-xs">Label</Label>
+                              <Input
+                                value={f.label}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  const next = [...selectedEntry.fields!];
+                                  next[idx] = { ...f, label: v };
+                                  const updatedEntry = { ...selectedEntry, fields: next };
+                                  setEntries(prev => prev.map(e => e.id === selectedEntry.id ? { ...updatedEntry, updatedAt: Date.now() } : e));
+                                  triggerAutoSave();
+                                }}
+                                placeholder="Field label"
+                                className="text-sm"
+                              />
+                            </div>
+                            <div className="col-span-3">
+                              <Label className="text-xs">Type</Label>
+                              <Select
+                                value={f.type}
+                                onValueChange={(v) => {
+                                  const next = [...selectedEntry.fields!];
+                                  next[idx] = { ...f, type: v as EntryField['type'] };
+                                  const updatedEntry = { ...selectedEntry, fields: next };
+                                  setEntries(prev => prev.map(e => e.id === selectedEntry.id ? { ...updatedEntry, updatedAt: Date.now() } : e));
+                                  triggerAutoSave();
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="text">Text</SelectItem>
+                                  <SelectItem value="password">Password</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="col-span-5">
+                              <Label className="text-xs">Value</Label>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type={f.type === 'password' && !(revealedFieldIds as Set<string>).has(f.id) ? 'password' : 'text'}
+                                  value={f.value}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    const next = [...selectedEntry.fields!];
+                                    next[idx] = { ...f, value: v };
+                                    const updatedEntry = { ...selectedEntry, fields: next };
+                                    setEntries(prev => prev.map(e => e.id === selectedEntry.id ? { ...updatedEntry, updatedAt: Date.now() } : e));
+                                    triggerAutoSave();
+                                  }}
+                                  placeholder="Field value"
+                                  className="text-sm"
+                                />
+                                {f.type === 'password' && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => {
+                                      const next = new Set(revealedFieldIds);
+                                      if (next.has(f.id)) next.delete(f.id); else next.add(f.id);
+                                      setRevealedFieldIds(next);
+                                    }}
+                                    title={(revealedFieldIds as Set<string>).has(f.id) ? 'Hide' : 'Show'}
+                                  >
+                                    {(revealedFieldIds as Set<string>).has(f.id) ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => copy(f.value, f.label || 'Field', `field-${f.id}`)}
                             title="Copy"
+                                  className={`transition-all duration-200 ${
+                                    copiedFieldIds.has(`field-${f.id}`)
+                                      ? 'bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700'
+                                      : ''
+                                  }`}
                           >
                             <Clipboard className="w-4 h-4" />
-                            Copy
                           </Button>
                         </div>
-                      ))}
                     </div>
-                  )}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                disabled={idx === 0}
+                                onClick={() => {
+                                  if (idx === 0) return;
+                                  const next = [...selectedEntry.fields!];
+                                  const [it] = next.splice(idx, 1);
+                                  next.splice(idx - 1, 0, it);
+                                  const updatedEntry = { ...selectedEntry, fields: next };
+                                  setEntries(prev => prev.map(e => e.id === selectedEntry.id ? { ...updatedEntry, updatedAt: Date.now() } : e));
+                                  triggerAutoSave();
+                                }}
+                                title="Move up"
+                              >
+                                <ArrowUp className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                disabled={idx === selectedEntry.fields!.length - 1}
+                                onClick={() => {
+                                  const next = [...selectedEntry.fields!];
+                                  const [it] = next.splice(idx, 1);
+                                  next.splice(idx + 1, 0, it);
+                                  const updatedEntry = { ...selectedEntry, fields: next };
+                                  setEntries(prev => prev.map(e => e.id === selectedEntry.id ? { ...updatedEntry, updatedAt: Date.now() } : e));
+                                  triggerAutoSave();
+                                }}
+                                title="Move down"
+                              >
+                                <ArrowDown className="w-4 h-4" />
+                              </Button>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              onClick={() => {
+                                const next = selectedEntry.fields!.filter(field => field.id !== f.id);
+                                const updatedEntry = { ...selectedEntry, fields: next };
+                                setEntries(prev => prev.map(e => e.id === selectedEntry.id ? { ...updatedEntry, updatedAt: Date.now() } : e));
+                                const nextReveal = new Set(revealedFieldIds);
+                                nextReveal.delete(f.id);
+                                setRevealedFieldIds(nextReveal);
+                                triggerAutoSave();
+                              }}
+                              title="Remove"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
             </CardContent>
           </Card>
-        </div>
+        </aside>
+      </main>
+
+      {/* Live region for status updates */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {hasUnsavedChanges && "You have unsaved changes"}
+        {Object.keys(copiedFieldIds).length > 0 && "Content copied to clipboard"}
       </div>
 
       <Dialog open={open} onOpenChange={(v) => {
         if (!v) { requestCloseEntryDialog(); } else { setOpen(true); }
       }}>
-        <DialogContent>
+        <DialogContent role="dialog" aria-modal="true" aria-labelledby="dialog-title">
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit entry' : 'New entry'}</DialogTitle>
+            <DialogTitle id="dialog-title">{editing ? 'Edit entry' : 'New entry'}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1">
@@ -425,8 +687,10 @@ export function MainScreen({
                     const nf: EntryField = { id: randomId(), label: '', type: 'text', value: '' } as EntryField;
                     setForm({ ...(form as any), fields: [...(((form as any).fields) || []), nf] } as any);
                   }}
+                  className="gap-2"
                 >
-                  <Plus className="w-4 h-4" /> Add field
+                  <Plus className="w-4 h-4" />
+                  Add field
                 </Button>
               </div>
               {(((form as any).fields) || []).length === 0 && (
